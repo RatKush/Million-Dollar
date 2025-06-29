@@ -8,3 +8,7 @@ Row 2: Displays dates from 2nd column onwards in "Serial Date" format (e.g., 458
 column 1: contain generic contract number with commodity name (from 3rd row) e.g., SOFR1 (A3) , SOFR2 (A4), SOFR3 (A5)
 Rows 3/ column 2: form B3 cell- Include financial data for commodity contracts. Each row shows numerical values (e.g., 95.67125, 95.665) likely representing prices or rates across the dates in row 2.
 
+To start:
+a. have all files in a folder
+b. there is a sample data set provided (SR3.xlsx) 
+c. run dashboard.py
