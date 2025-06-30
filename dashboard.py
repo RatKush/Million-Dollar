@@ -28,6 +28,7 @@ filename_options = [{'label': f, 'value': f} for f in excel_files]
 # ------------------------------------------------
 app = dash.Dash(__name__, assets_folder='assets',external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.title = "Million Dollar"
+app.config.suppress_callback_exceptions = True #to suprres initital callback if they got imniititated
 #app.run_server(host='0.0.0.0', port=8050)  # Allow external access
 # ##############################shared control panel for all 4 kde plot cntrol tab3---- tab6################################
 def get_kde_controls():
