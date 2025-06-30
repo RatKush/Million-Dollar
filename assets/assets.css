@@ -1,0 +1,32 @@
+#kde-flags-shared-wrapper {
+    position: absolute;
+    top: 140px;                        /* Adjust as needed */
+    right: 0.1%;
+    width: 16.666%;                  /* Bootstrap 2/12 */
+    background-color: #ffffff;       /* Match Bootstrap card */
+    border: 1px solid #dee2e6;       /* Bootstrap border color */
+    border-radius: 0.5rem;           /* Bootstrap-like rounded */
+    padding: 1rem;                   /* 16px */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    z-index: 999;
+
+    /* Smooth show/hide transitions (optional) */
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+
+
+
+
+
+/* #kde-flags-shared-wrapper {
+    position: absolute;
+    top: 100px; /* or 120px – adjust as needed 
+    right: 2%;
+    width: 16.666%; /* 2/12 
+    background-color: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 999;
+} */
