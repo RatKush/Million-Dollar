@@ -18,7 +18,8 @@ def initiate_plot(title):
     fig.update_layout(
         #xaxis_title='Value',
         #yaxis_title='Density',
-        title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=16)),
+        title={"text": f"{title}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
+        #title=dict(text=title, x=0.5, y=0.99, xanchor="center",  "font": {"size": 14, "color": "#1f2128"}),
         legend=dict(x=0.5, y=0.96, orientation="h", xanchor="center", yanchor="bottom"),
         height=520,
         margin=dict(l=10, r=10, t=30, b=20),
@@ -162,7 +163,11 @@ def classify_cycle(series,comdty, out_df,lookback_prd, base_str, sum_first_n_bas
         if base_df.index.min() > date:
             break
         score = row.iloc[:sum_first_n_base].sum()
-        str_val = series.get(date.strftime('%Y-%m-%d'))
+        if pd.notna(date):
+            str_val = series.get(date.strftime('%Y-%m-%d'))
+        else:
+            str_val = None
+        
         if score > hike_threshold:
             hike_cycle.at[date] = str_val
         elif score < dovish_threshold:

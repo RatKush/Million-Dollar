@@ -26,45 +26,64 @@ filename_options = [{'label': f, 'value': f} for f in excel_files]
 # ------------------------------------------------remove_outliers
 # DASH APP INITIALIZATION
 # ------------------------------------------------
-app = dash.Dash(__name__, assets_folder='assets',external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, assets_folder='assets',external_stylesheets=[dbc.themes.CYBORG])
 app.title = "Million Dollar"
 #app.run_server(host='0.0.0.0', port=8050)  # Allow external access
 # ##############################shared control panel for all 4 kde plot cntrol tab3---- tab6################################
 def get_kde_controls():
     return html.Div([
-        html.H5("Plot Controls", className="mb-3"),
+        html.H5("Plot Controls", style={"color":"#c0c4cc","textAlign": "center", "padding": "8px 16px","backgroundColor": "#2b2e35","fontWeight": "500","fontSize": "16px","border": "1px solid #3a3f4b",  "borderTopLeftRadius": "8px",  "borderTopRightRadius": "8px", "margin": "0"}
+        ),
 
-        dbc.Card([
-            dbc.CardHeader("Cycle Classification", className="fw-bold small py-1 px-2"),
-            dbc.CardBody(
-                dbc.Stack([
+        # --- Cycle Classification Section (Wide, Cleaner) ---
+            html.Div([
+                html.Div("Cycle Classification", className="fw-bold small px-2 py-1", style={
+                    "backgroundColor": "#1f2128",
+                    "borderBottom": "1px solid #3a3f4b",
+                    "borderTopLeftRadius": "6px",
+                    "borderTopRightRadius": "6px",
+                    "color": "#c0c4cc",
+                    "fontWeight": "500",
+                    "textAlign": "center",
+                    "padding": "8px 16px",
+                }),
 
-                    dbc.Row([
-                        dbc.Col(html.Label("Base Str", className="form-label"), width=7),
-                        dbc.Col(dbc.Input(id="base-str-input", type="text", value="S3", debounce=True, placeholder="S3/L3", className="form-control form-control-sm"), width=5)
-                    ], id="base-str-row", className="mb-1"),
+                html.Div([
 
-                    dbc.Row([
-                        dbc.Col(html.Label("Cons to Sum", className="form-label"), width=8),
-                        dbc.Col(dbc.Input(id="sum-first-n-base-input", type="number", value=4, min=1, step=1, debounce=True, className="form-control form-control-sm"), width=4)
-                    ], id="sum-first-n-base-row", className="mb-2"),
+                    html.Div([
+                        html.Label("Base Str", className="form-label", style={"width": "68%", "marginBottom": 0}),
+                        dcc.Input(id="base-str-input", type="text", value="S3", debounce=True, placeholder="S3/L3",
+                                className="form-control form-control-sm", style={"width": "32%"})
+                    ], className="d-flex justify-content-between mb-2"),
 
-                    dbc.Row([
-                        dbc.Col(html.Label("Hike Thrshld", className="form-label"), width=7),
-                        dbc.Col(dbc.Input(id="hike-threshold-input", type="number", value=50, step=10, debounce=True, className="form-control form-control-sm"), width=5)
-                    ], id="hike-threshold-row", className="mb-2"),
+                    html.Div([
+                        html.Label("Cons to Sum", className="form-label", style={"width": "70%", "marginBottom": 0}),
+                        dcc.Input(id="sum-first-n-base-input", type="number", value=4, min=1, step=1, debounce=True,
+                                className="form-control form-control-sm", style={"width": "30%"})
+                    ], className="d-flex justify-content-between mb-2"),
 
-                    dbc.Row([
-                        dbc.Col(html.Label("Ease Thrshld", className="form-label"), width=7),
-                        dbc.Col(dbc.Input(id="ease-threshold-input", type="number", value=-50, step=10, debounce=True, className="form-control form-control-sm"), width=5)
-                    ], id="ease-threshold-row", className="mb-2"),
+                    html.Div([
+                        html.Label("Hike Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
+                        dcc.Input(id="hike-threshold-input", type="number", value=50, step=10, debounce=True,
+                                className="form-control form-control-sm", style={"width": "32%"})
+                    ], className="d-flex justify-content-between mb-2"),
 
-                ], gap=0.2), className="p-0"
-            )
-        ], className="cycle-box border border-secondary rounded-1", style={"width": "100%", "margin": "0", "padding": "0"}),
+                    html.Div([
+                        html.Label("Ease Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
+                        dcc.Input(id="ease-threshold-input", type="number", value=-50, step=10, debounce=True,
+                                className="form-control form-control-sm", style={"width": "32%"})
+                    ], className="d-flex justify-content-between mb-1")
+
+                ], style={"padding": "12px 10px 10px 10px"})
+
+            ], style={
+                "border": "1px solid #3a3f4b",
+                "borderRadius": "6px",
+                "backgroundColor": "#2b2e35",
+                "margin": "10px 0 18px 0"
+            }),
 
 
-        # Checklist
         dbc.Checklist(
             id='kde-flags-shared',
             options=[
@@ -84,37 +103,28 @@ def get_kde_controls():
             ],
             value=["Latest", "local_mean", "med", "band68", "band95"],
             switch=True,
-            className="mb-3"
+            className="px-3 mb-3"
         ),
 
-        dbc.Stack([
-            dbc.Row([
-                dbc.Col(html.Label("Local Win", className="form-label"), width=6),
-                dbc.Col(
-                    dbc.Input(id="kde-local-win-shared",type="number",value=15,min=1,step=2,debounce=True,className="form-control form-control-sm"
-                    ),width=6
-                )
-            ], id="kde-local-row", className="mb-2", style={"display": "none"}),
+        html.Div([
+            html.Label("Local Win", className="form-label", style={"width": "60%"}),
+            dcc.Input(id="kde-local-win-shared", type="number", value=15, min=1, step=2, debounce=True, className="form-control form-control-sm", style={"width": "40%"})
+        ], className="d-flex px-3 mb-2", id="kde-local-row", style={"display": "none"}),
 
-            dbc.Row([
-                dbc.Col(html.Label("Val Line", className="form-label"), width=6),
-                dbc.Col(
-                    dbc.Input(id="kde-val-line-shared",type="number",value=0,debounce=True,className="form-control form-control-sm"
-                    ),width=6
-                )
-            ], id="kde-val-row", className="mb-2", style={"display": "none"}),
+        html.Div([
+            html.Label("Val Line", className="form-label", style={"width": "60%"}),
+            dcc.Input(id="kde-val-line-shared", type="number", value=0, debounce=True, className="form-control form-control-sm", style={"width": "40%"})
+        ], className="d-flex px-3 mb-2", id="kde-val-row", style={"display": "none"}),
 
-            dbc.Row([
-                dbc.Col(html.Label("% Line", className="form-label"), width=4),
-                dbc.Col(
-                    dbc.Input(id="kde-pc-line-shared",type="number",value=95,min=0,max=100,step=5,debounce=True,className="form-control form-control-sm"
-                    ),width=8
-                )
-            ], id="kde-pc-row", className="mb-2", style={"display": "none"}),
+        html.Div([
+            html.Label("% Line", className="form-label", style={"width": "40%"}),
+            dcc.Input(id="kde-pc-line-shared", type="number", value=95, min=0, max=100, step=5, debounce=True, className="form-control form-control-sm", style={"width": "60%"})
+        ], className="d-flex px-3 mb-3", id="kde-pc-row", style={"display": "none"})
 
-        ], gap=2)
+    ], className="control-panel-1")
 
-    ], className="p-2", style={"width": "100%"})  # Full width inside 2/12 container
+
+  # Full width inside 2/12 container
 
 
 
@@ -142,7 +152,7 @@ dbc.Container(
 app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
-            html.Label("Filename"),
+            html.Label("Filename", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Dropdown(
                 id='filename',
                 options=filename_options,
@@ -152,14 +162,14 @@ app.layout = dbc.Container([
             )
         ]),
         dbc.Col([
-            html.Label("Comdty"),
+            html.Label("Comdty",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Loading(
                 dcc.Input(id='comdty', type='text', value='', disabled=True, className='form-control'),
             type= 'circle'
             )
         ]),
         dbc.Col([
-            html.Label("Structure"),
+            html.Label("Structure", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Dropdown(
                 id='str_name',
                 options=index,
@@ -169,15 +179,15 @@ app.layout = dbc.Container([
             )
         ]),
         dbc.Col([
-            html.Label("Curve Length"),
-            dcc.Input(id='curve_length', type='number', value=15, className='form-control')
+            html.Label("Curve Length",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
+            dcc.Input(id='curve_length', type='number', value=15, min= 5,  className='form-control')
         ]),
         dbc.Col([
-            html.Label("Str Number"),
-            dcc.Input(id='str_number', type='number', value=8, className='form-control')
+            html.Label("Str Number", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
+            dcc.Input(id='str_number', type='number', value=8, min=1, className='form-control')
         ]),
         dbc.Col([
-            html.Label("Lookback Period"),
+            html.Label("Lookback Period", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Input(id='lookback_prd', type='number', value=250, min=10, step=10, className='form-control')
         ]),
         dbc.Col([
@@ -202,11 +212,18 @@ app.layout = dbc.Container([
         className="my-2",
         style={"display": "none"}  # Hidden by default
     ),
+
+    # style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2c2f36","color": "#cfd8dc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+    # },
+    # selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1e1e2f","color": "#ffffff","fontWeight": "600","border": "1px solid #4a4f5c","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+    # },
 ####################################################################### tab 1 ###################################################
     dcc.Tabs(id="tabs", value='tab1', children=[
         dcc.Tab(label='Curve View', value='tab1',
-        style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-        selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+        style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+        selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
         children=[
             dbc.Row([
                 dbc.Col(dcc.Loading(
@@ -214,7 +231,8 @@ app.layout = dbc.Container([
                     type="circle",
                     children=html.Div(dcc.Graph(id='curve-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-2 my-2 rounded")), width=10),
                 dbc.Col([
-                    html.H5("Plot Controls", className="mb-3"),
+                    html.H5("Plot Controls", style={"color":"#c0c4cc","textAlign": "center", "padding": "8px 16px","backgroundColor": "#2b2e35","fontWeight": "500","fontSize": "16px","border": "1px solid #3a3f4b",  "borderTopLeftRadius": "8px",  "borderTopRightRadius": "8px", "margin": "0"},
+                    ),
                     dbc.Checklist(
                         id='plot-flags',
                         options=[
@@ -230,7 +248,7 @@ app.layout = dbc.Container([
                         ],
                         value=["Latest", "Settle", "XN"],
                         switch=True,
-                        className="mb-3"
+                        className="control-panel-1"
                     ),
                     dbc.Stack([
                         dbc.Row([
@@ -268,8 +286,10 @@ app.layout = dbc.Container([
         ]),
 ###################################################  tab 2 ##############################################################################
     dcc.Tab(label='Chart', value='tab2',
-    style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-    selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
     children=[
         dbc.Row([
             dbc.Col(dcc.Loading(
@@ -304,8 +324,10 @@ app.layout = dbc.Container([
 
 
     dcc.Tab(label='KDE', value='tab3',
-    style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-    selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
     children=[
         html.Div([  #####css-for-control panel
             dbc.Row([
@@ -320,8 +342,10 @@ app.layout = dbc.Container([
 
 ################################################ tab 4 ################################################################
 dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
-    style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-    selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
     children=[
         html.Div([  #####css-for-control panel
             dbc.Row([
@@ -336,8 +360,10 @@ dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
 
 ###################################################### tab 5 ###################################################
     dcc.Tab(label='KDE (Ease Cycle)', value='tab5',
-    style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-    selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
     children=[
         html.Div([  #####css-for-control panel
             dbc.Row([
@@ -352,8 +378,10 @@ dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
 
 ###################################################### tab 6 ####################################################
     dcc.Tab(label='KDE (Side Ways)', value='tab6',
-    style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-    selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
     children=[
         dbc.Row([
             dbc.Col(dcc.Loading(
@@ -365,8 +393,10 @@ dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
     ]),
 ############################################################# tab 7 ################################################################        
         dcc.Tab(label='Matrix Filter', value='tab7',
-        style={"height": "45px", "borderRadius": "8px", "padding": "8px"},
-        selected_style={"height": "45px", "borderRadius": "8px", "padding": "8px", "backgroundColor": "#ffffff", "borderBottom": "none"},
+        style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+        },
+    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+        },
         ),
     ]),  # ← close Tabs here
 
@@ -498,7 +528,9 @@ def update_chart_tab(stored):
         return warning_plot("Series data not availbale (no stored data)")
     
     s = stored['series']
+   
     series = pd.Series(data=s['values'], index=pd.to_datetime(s['index']))
+    #print(series.head())
     str_name = f"{stored['comdty']}{stored['str_name']}({stored['str_number']})"
     comdty= stored["comdty"]
     out_df = pd.DataFrame( 
@@ -508,7 +540,11 @@ def update_chart_tab(stored):
     )
     lookback_prd= stored["lookback_prd"]
     # sum of ease/ hike limited upto first 8 S3s
-    sum_of_ease_or_hikes= cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
+    #print(comdty)
+    if comdty in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
+        sum_of_ease_or_hikes= pd.Series(dtype='float64')
+    else:
+        sum_of_ease_or_hikes= cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
     return plot_single_structure(series, str_name),plot_single_structure(sum_of_ease_or_hikes, "sum of eases/ hikes")
 
 
@@ -617,9 +653,9 @@ def classify_and_store(stored, base_str, sum_first_n_base, hike_threshold, ease_
         return {}
     comdty= stored["comdty"]
     out_df = pd.DataFrame(
-      data=stored["out_df"]["data"],
-       index=pd.to_datetime(stored["out_df"]["index"]),
-      columns=stored["out_df"]["columns"]
+        data=stored["out_df"]["data"],
+        index=pd.to_datetime(stored["out_df"]["index"]),
+        columns=stored["out_df"]["columns"]
     )
     if out_df.empty:
         return {}
@@ -671,6 +707,9 @@ def update_kde_plot_tab4(stored, cycle_store, kde_flags, local_win, val_line, pc
     #print("hello hike")
     if not stored:
         return warning_plot("⚠ No 'Hike' cycle data available as per your criteria (no parent data)")
+    
+    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
+        return warning_plot("⚠ Not relevent")
            
     # Parse full series
     series = pd.Series(
@@ -728,6 +767,8 @@ def update_kde_plot_tab5(stored, cycle_store, kde_flags, local_win, val_line, pc
     if not stored:
         return warning_plot("⚠ No 'Ease' cycle data available as per your criteria (no parent data)")
 
+    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
+        return warning_plot("⚠ Not relevent")
     # Parse full series
     series = pd.Series(data=stored["series"]["values"], index=stored["series"]["index"])
 
@@ -779,6 +820,8 @@ def update_kde_plot_tab6(stored, cycle_store, kde_flags, local_win, val_line, pc
     if not stored:
         return warning_plot("⚠ No 'Side' ways cycle data available as per your criteria (no parent data)")
 
+    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
+        return warning_plot("⚠ Not relevent")
     # Parse full series
     series = pd.Series(data=stored["series"]["values"], index=stored["series"]["index"])
 
@@ -815,7 +858,7 @@ def update_kde_plot_tab6(stored, cycle_store, kde_flags, local_win, val_line, pc
 def warning_plot(warning):
     fig = go.Figure()
     fig.add_annotation(
-        #text="⚠ No 'Hike' cycle data available as per your criteria (no parent data)",
+        #text="⚠ No 'Hike' cycle data available as per your criteria ",
         text= warning,
         showarrow=False,
         font=dict(color="red", size=16),
@@ -835,4 +878,4 @@ def warning_plot(warning):
 # ------------------------------------------------
 if __name__ == '__main__':
     #app.run(debug=True)
-    app.run(debug= True, host='0.0.0.0', port=8050)
+    app.run(debug= True)
