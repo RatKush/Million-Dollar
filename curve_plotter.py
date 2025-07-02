@@ -4,6 +4,7 @@ from datetime import datetime
 from curve_help import moving_average, bollinger_bands, maxmin_band, median_series, rolling_quantile_series
 from str_cal import load_data, fill_missing_values, get_ratio, calculate_str, remove_outliers, rolling_bounds_filter,process_help_calculation
 import str_cal as strtr
+from kde_help import get_rank
 
 def init_plot(title):
     """
@@ -11,7 +12,9 @@ def init_plot(title):
     """
     fig = go.Figure()
     fig.update_layout(
-        title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=16)),
+
+        title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=14,  color= "#1f2128")),
+        #template="plotly_dark", #"plotly" Default white background
         hovermode="x unified",
         legend=dict(
             x=0.5, y=0.95,
@@ -129,6 +132,7 @@ def generate_curve_plot(str_df,plot_title,win_local,bb_std,quantile,Settle,date1
             return None
         if isinstance(date_str_or_obj_or_none, str):
             try:
+                #print(f"safe_parse_date: {date_str_or_obj_or_none}")  # See what is getting passed
                 return datetime.strptime(date_str_or_obj_or_none, "%Y-%m-%d")
             except ValueError:
                 return None  # or raise an error if you want
@@ -179,12 +183,16 @@ def generate_curve_plot(str_df,plot_title,win_local,bb_std,quantile,Settle,date1
 
 
 def plot_single_structure(series, str_name):
-    # Ensure index is datetime for x-axis formatting
-    if not pd.api.types.is_datetime64_any_dtype(series.index):
-        series.index = pd.to_datetime(series.index, errors='coerce')
 
     if series.empty:
-        return warning_plot_copy2(f"Series data not availbale (plot_single_structure_{str_name})")
+        print("empty series")
+        return warning_plot_copy2(f"⚠ Series data not availbale (plot_single_structure_{str_name})")
+    # Ensure index is datetime for x-axis formatting
+    if not pd.api.types.is_datetime64_any_dtype(series.index):
+        #print("plot single",series.index)
+        series.index = pd.to_datetime(series.index, errors='coerce')
+
+    
 
     fig = go.Figure()
     series = pd.to_numeric(series, errors='coerce')
@@ -196,6 +204,7 @@ def plot_single_structure(series, str_name):
     latest_x = series.index[0]
     latest_y = series.values[0]
     y0 = latest_y  #latest level
+    latest_percentile= get_rank(series , y0)
     fig.add_shape(
         type="line",
         x0=min(series.index), x1=max(series.index),
@@ -261,8 +270,8 @@ def plot_single_structure(series, str_name):
         spikesnap='cursor'
     )
     fig.update_layout(
-        #title=dict(text=title, x=0.5, y=0.99, xanchor="center"),
-        title={"text": f"{str_name}", "x": 0.5, "xanchor": "center", "font": {"size": 16}},
+        #title=dict(text=title, x=0.5, y=0.99, xanchor="center"), font=dict(size=14,  color= "#1f2128")
+        title={"text": f"{str_name}", "x": 0.5, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
         #xaxis_title="Date",
         #yaxis_title="Structure Value",
         height=500,
