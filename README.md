@@ -1,21 +1,105 @@
 # Million-Dollar
-Interactive dashboard for analyzing SOFR/ SONIA/ Euribor/ CoRRA/ EFFR futures structures: curve views, cycle classification, KDE overlays, and structure breakdowns. Built with Dash, Bootstrap, and Plotly.
+Million Dollar Futures Dashboard
 
-To run Million Dollar at local:-
-first prepare data in mentioned format- 
-data format in excel--
+An interactive dashboard to analyze futures structures for SOFR / SONIA / Euribor / CoRRA / EFFR / VIX / FVS.
+Key features include:
+
+Curve views
+
+Cycle classification
+
+KDE overlays
+
+Structure breakdowns
+
+
+Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience.
+
+
+---
+
+🚀 How to Run Locally
+
+1. Prepare Your Data
+
 ![image](https://github.com/user-attachments/assets/ccf74a35-3e4f-4c81-95e3-d68f4fb7b355)
+Your dataset should be in Excel format and follow this structure:
+
+	A	B (latest date)	C (older date)	...
+
+1	(any text or leave empty)	(dates in serial format like 45828)	...	
+2	SOFR1	95.67125	...	
+3	SOFR2	95.665	...	
+...	...	...	...	
 
 
-Row 1: Contains headers or placeholders for data, Anything you want or Empty row 
-Row 2: Displays dates from 2nd column onwards in "Serial Date" format (e.g., 45828, 45827) in decreasing order representing specific days. Latest data is in 2nd column
-column 1: contain generic contract number with commodity name (from 3rd row) e.g., SOFR1 (A3) , SOFR2 (A4), SOFR3 (A5)
-Rows 3/ column 2: form B3 cell- Include financial data for commodity contracts. Each row shows numerical values (e.g., 95.67125, 95.665) likely representing prices or rates across the dates in row 2.
+Notes:
 
-ready to run:
-a. have all files in a folder
-b. there is a sample data set provided (SR3.xlsx) keep it in the same folder or keep your own data in illistrtive data's format 
-c. cmd> pip install -r path_of_requirements.txt
-d. run dashboard.py
-(terminal>> python dashboard.py
-e. you should get a url at output i.e. http://127.0.0.1:8050/
+Row 1: Header or placeholder (can be empty)
+
+Row 2: Dates in Excel serial format, decreasing from left to right (latest date in column B)
+
+Column A: Commodity + Contract ID (e.g., SOFR1, SOFR2...)
+
+Cells from B3 onwards: Numerical data for each contract over time
+
+
+A sample file (SR3.xlsx) is provided in the repo for reference.
+
+
+---
+
+2. Setup Instructions
+
+a. Place All Files Together
+
+Ensure dashboard.py, requirements.txt,other python scripts and your data file (e.g., SR3.xlsx) are in the same directory.
+
+b. Install Dependencies
+
+pip install -r requirements.txt
+
+c. Run the App
+
+python dashboard.py
+
+d. Open in Browser
+
+Once the server starts, open the displayed URL, typically:
+
+http://127.0.0.1:8050/
+
+
+---
+
+📁 File Structure
+
+project_folder/
+│
+├── dashboard.py
+├── requirements.txt
+├── other python scripts
+├── SR3.xlsx  ← (or your own dataset)
+
+
+---
+
+📌 Dependencies
+
+Make sure you have Python 3.7+ installed.
+Dependencies are listed in requirements.txt and include:
+
+dash
+
+plotly
+
+pandas
+
+openpyxl
+
+numpy
+
+dash-bootstrap-components
+
+
+
