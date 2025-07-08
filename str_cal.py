@@ -134,7 +134,7 @@ def load_data(lookback_prd, filepath="SR3.xlsx"):
     """
     df = pd.read_excel(filepath, sheet_name=0)
     
-    max_cols = min(df.shape[1] - 1, lookback_prd)
+    max_cols = min(df.shape[1] - 1, lookback_prd+21)
     df = df.iloc[:, 0 : max_cols + 1]
     
     xl_dates = pd.to_numeric(df.iloc[0, 1:].values, errors='coerce')
