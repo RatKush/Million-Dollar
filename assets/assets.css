@@ -1,3 +1,41 @@
+/*  ************************************************* tABS ******************************************************************/
+
+/* Hover effect on tabs*/
+div.tab:hover,
+div.tab--selected:hover {
+    border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-left:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-right:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-bottom: none !important;
+}
+
+
+
+
+
+/*  ************************************************* kde control panell ******************************************************************/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #kde-flags-shared-wrapper {
     position: absolute;
     top: 140px;
@@ -54,5 +92,49 @@
 }
 
 .control-panel-1 .form-check-input:checked + .form-check-label {
+    color: #ffffff;
+}
+
+.hidden-row {
+    display: none;
+}
+
+
+/*##################################################### tab 2 buttons #######################################################*/
+/* Button styling for chart tab toggle buttons */
+.tab-button {
+    height: 32px;
+    border-radius: 8px 8px 0 0;
+    padding: 4px 16px;
+    margin-right: 4px;
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    font-weight: 350;
+    border: 1px solid #3a3f4b;
+    border-bottom: none;
+    transition: background-color 0.3s, color 0.3s;
+    cursor: pointer;
+}
+
+.tab-button.selected {
+    height: 34px;
+    background-color: #1f2128;
+    color: #ffffff;
+    font-weight: 400;
+    border: 1px solid #5e636e;
+}
+
+/*  Hover (applies to both) */
+.tab-button:hover,
+.tab-button.selected:hover {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border-top: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left:  1px solid rgba(255, 255, 255, 0.2) ;
+    border-right:  1px solid rgba(255, 255, 255, 0.2) ;
+    border-bottom: none;
+}
+.tab-button.selected:hover {
+    background-color: #1f2128;
     color: #ffffff;
 }
