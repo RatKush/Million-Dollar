@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
 import dash_bootstrap_components as dbc
-import dcor
+#import dcor
 
 from curve_help import moving_average, bollinger_bands, maxmin_band, median_series, rolling_quantile_series
 from str_cal import load_data, fill_missing_values, get_ratio, calculate_str, remove_outliers, rolling_bounds_filter,process_help_calculation
@@ -537,10 +537,11 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
     # The first (window - 1) values will be NaN, so we drop them before calculating the mean.
     mean_rolling_corr = rolling_corr.dropna().mean()
 
-    # --- 3. Distance Correlation (dCor) ---
-    # dCor is powerful because it is zero if and only if the series are truly independent.
-    # It captures non-linear and non-monotonic relationships that standard correlation would miss.
-    dist_corr = dcor.distance_correlation(series1.values, series2.values)
+    # # --- 3. Distance Correlation (dCor) ---
+    # # dCor is powerful because it is zero if and only if the series are truly independent.
+    # # It captures non-linear and non-monotonic relationships that standard correlation would miss.
+    # dist_corr = dcor.distance_correlation(series1.values, series2.values)
+    dist_corr=0
 
     return {
         'mean_rolling_correlation': mean_rolling_corr,
