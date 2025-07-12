@@ -12,10 +12,10 @@ import difflib
 
 def extract_comdty(filepath):
     text_lower = filepath.lower()
-    match_pool= ["sr3", "sr1", "so3", "er", "er3", "corra", "szi0", "meeting", "meet", "sonia", "sofr", "euribor","meetings", "sa3", "saron", "vix vs voxx", "vix", "vx", "VOXX", "vol", "FVS", "fvs", "vstoxx"]
+    match_pool= ["SR3_ED","sr3", "sr1", "so3", "er", "er3", "corra", "szi0", "meeting", "meet", "sonia", "sofr", "euribor","meetings", "sa3", "saron", "vix vs voxx", "vix", "vx", "VOXX", "vol", "FVS", "fvs", "vstoxx"]
     #best_match = difflib.get_close_matches(text_lower, match_pool, n=1, cutoff=0.4)
     mapping= {
-        "sr3": "SR3", "sr1": "SR1", "so3": "S03", "er": "ER", "er3": "ER", "corra":"CoRRa", "szi0":"SZI0", "meeting": "meets", "meet": "meets", "sonia":"SO3", "sofr":"SR3", "euribor":"ER","meetings":"meets", "sa3":"SA3", "saron" :"SA3", "eurodollar":"ED", "ed": "ED", "vix": "VIX", "vx":"VIX", "VOXX": "FVS" , "FVS":"FVS", "fvs":"FVS", "vstoxx":"FVS", "vol":"VIX", "vix vs voxx": "VIX- VOXX"
+        "SR3_ED": "SR3_ED", "sr3": "SR3", "sr1": "SR1", "so3": "S03", "er": "ER", "er3": "ER", "corra":"CoRRa", "szi0":"SZI0", "meeting": "meets", "meet": "meets", "sonia":"SO3", "sofr":"SR3", "euribor":"ER","meetings":"meets", "sa3":"SA3", "saron" :"SA3", "eurodollar":"ED", "ed": "ED", "vix": "VIX", "vx":"VIX", "VOXX": "FVS" , "FVS":"FVS", "fvs":"FVS", "vstoxx":"FVS", "vol":"VIX", "vix vs voxx": "VIX- VOXX"
     }
      # Custom similarity ranking
     scored = []
@@ -90,7 +90,7 @@ def process_help_calculation(comdty, out_df, str_name, lookback_prd, curve_lengt
         lookback_prd = str_df.shape[0] - 1  # fallback to all rows
 
     lookback_prd = max(0, min(lookback_prd, str_df.shape[0] - 1))
-    str_df = str_df.head(lookback_prd + 1)
+    str_df = str_df.head(lookback_prd)
 
     #print(comdty)
     return str_df, comdty
@@ -127,7 +127,7 @@ def fill_missing_values(df):
     return df.apply(_fill_mid_nan, axis=1)
 
 
-def load_data(lookback_prd, filepath="SR3.xlsx"):
+def load_data(lookback_prd, filepath="SR3_ED.xlsxm"):
     """
     Load structured curve data from Excel, trimming to lookback_prd columns 
     for speed. Returns a DataFrame indexed by date, with one column per contract.
@@ -160,24 +160,26 @@ def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     return df_cleaned.interpolate(method='linear', limit_direction='both', axis=0)
 
 ## use it in place of remove  outliers  for a df  # rolling mean ± k*std.
-def rolling_bounds_filter(df, window=21, k=2.5):
-    def process_series(series):
-        series = pd.to_numeric(series, errors='coerce')
-        rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
-        rolling_std = series.rolling(window=window, center=True,  min_periods=5).std()
-        upper_bound = rolling_mean + k * rolling_std
-        lower_bound = rolling_mean - k * rolling_std
-        # Replace only where bounds are valid (not NaN)
-        mask = (series < lower_bound) | (series > upper_bound)
-        filtered = series.copy()
-        filtered[mask] = np.nan
-        
-        return filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+def process_series(series, window=21, k=2.5):
+    series = pd.to_numeric(series, errors='coerce')
+    rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
+    rolling_std = series.rolling(window=window, center=True,  min_periods=5).std()
+    upper_bound = rolling_mean + k * rolling_std
+    lower_bound = rolling_mean - k * rolling_std
+    # Replace only where bounds are valid (not NaN)
+    mask = (series < lower_bound) | (series > upper_bound)
+    filtered = series.copy()
+    filtered[mask] = np.nan
     
+    return filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+
+def rolling_bounds_filter(df, window=21, k=2.5):
     if isinstance(df, pd.Series):
-        return process_series(df)
+        return process_series(df, window=window, k=k)
     elif isinstance(df, pd.DataFrame):
-        return df.apply(process_series)
+        return df.apply(process_series, window=window, k=k)
     else:
         raise TypeError("Input must be a pandas Series or DataFrame")
 

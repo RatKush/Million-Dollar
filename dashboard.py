@@ -9,9 +9,9 @@ import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 
 # Custom modules
-from str_cal import process_structure, extract_comdty,process_help_calculation, index 
-from curve_plotter import plot_single_structure
-from curve_plotter import generate_curve_plot, cal_sum_of_eases_hikes
+from str_cal import process_structure, extract_comdty,process_help_calculation, index , get_ratio
+from curve_plotter import plot_single_structure, get_button_class, compute_correlation_parameters
+from curve_plotter import generate_curve_plot, cal_sum_of_eases_hikes,cal_sum_of_same_sign_meets, Out_tab2_2 ,S12_tab2_2,add_chart_2_2, plot_chart_2_2, build_button
 from kde_help import plot_main_kde, classify_cycle, plotted
 
 # ------------------------------------------------
@@ -30,6 +30,10 @@ filename_options = [{'label': f, 'value': f} for f in excel_files]
 app = dash.Dash(__name__, assets_folder='assets',external_stylesheets=[dbc.themes.CYBORG])
 app.title = "Million Dollar"
 app.config.suppress_callback_exceptions = True# for live
+
+
+
+
 # ##############################shared control panel for all 4 kde plot cntrol tab3---- tab6################################
 def get_kde_controls():
     return html.Div([
@@ -129,13 +133,13 @@ def get_kde_controls():
 
 
 
-dcc.Store(id='kde-shared-store', storage_type='session',
-    data={
-        'flags': ["Latest", "local_mean", "band68","band95" ],
-        'local_win': 10,
-        'val_line': 0,
-        'pc_line': 95
-    })
+# dcc.Store(id='kde-shared-store', storage_type='session',
+#     data={
+#         'flags': ["Latest", "local_mean", "band68","band95" ],
+#         'local_win': 10,
+#         'val_line': 0,
+#         'pc_line': 95
+#     })
 #wrapper for easy styling and clarity needed to add in layout 
 dbc.Container(
     id="kde-flags-shared-wrapper",
@@ -143,6 +147,33 @@ dbc.Container(
     className="kde-floating-panel-css",
     style={"display": "none"}  # Hidden by default
 )
+
+########################################### tab2_2 buttons #################################################
+BUTTON_IDS = [
+    "btn-ease_hike",
+    "btn-nth_out",
+    "btn-mid_out",
+    "btn-1sts12",
+    "btn-nths12",
+    "btn-12ths12",
+    "btn-effr",
+]
+DEFAULT_TOGGLE_STATES = {
+    "btn-ease_hike": True,   # e.g. default ON
+    "btn-nth_out": False,
+    "btn-mid_out": False,
+    "btn-1sts12": False,
+    "btn-nths12": False,
+    "btn-12ths12": False,
+    "btn-effr": False,
+}
+
+
+
+
+
+
+
 
 
 ##################################################### app layout #############################################################
@@ -157,7 +188,7 @@ app.layout = dbc.Container([
             dcc.Dropdown(
                 id='filename',
                 options=filename_options,
-                value="SR3.xlsx" if "SR3.xlsx" in excel_files else excel_files[0] if excel_files else None,
+                value="SR3_ED.xlsm" if "SR3_ED.xlsm" in excel_files else "SR3.xlsx" if "SR3.xlsx" in excel_files  else excel_files[0] if excel_files else None,
                 clearable=False,
                 className='form-control'
             )
@@ -199,13 +230,13 @@ app.layout = dbc.Container([
 
 
 ####################### kde -control for tab3, tab4, tab5, tab6--- needto declare beffore tabs declation#######################
-    dcc.Store(id='kde-shared-store', storage_type='session',
-    data={
-        'flags': ["Latest", "local_mean", "band68","band95" ],
-        'local_win': 10,
-        'val_line': 0,
-        'pc_line': 95
-    }),
+    # dcc.Store(id='kde-shared-store', storage_type='session',
+    # data={
+    #     'flags': ["Latest", "local_mean", "band68","band95" ],
+    #     'local_win': 10,
+    #     'val_line': 0,
+    #     'pc_line': 95
+    # }),
     #wrapper for easy styling and clarity 
     dbc.Container(
         id="kde-flags-shared-wrapper",
@@ -218,9 +249,9 @@ app.layout = dbc.Container([
 ####################################################################### tab 1 ###################################################
     dcc.Tabs(id="tabs", value='tab1', children=[
         dcc.Tab(label='Curve View', value='tab1',
-        style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-        selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+            style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
+            },
+            selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
         },
         children=[
             dbc.Row([
@@ -283,40 +314,109 @@ app.layout = dbc.Container([
             ])
         ]),
 ###################################################  tab 2 ##############################################################################
-    dcc.Tab(label='Chart', value='tab2',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
+
+dcc.Tab(
+    label='Chart',
+    value='tab2',
+    style={
+        "height": "42px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
+        "marginRight": "4px", "backgroundColor": "#2b2e35", "color": "#c0c4cc",
+        "fontWeight": "500", "border": "1px solid #3a3f4b", "borderBottom": "none",
+        "transition": "background-color 0.3s, color 0.3s"
+    },
+    selected_style={
+        "height": "45px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
+        "backgroundColor": "#1f2128", "color": "#ffffff", "fontWeight": "600",
+        "border": "1px solid #5e636e", "borderBottom": "none",
+        "boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+    },
     children=[
-        dbc.Row([
-            dbc.Col(dcc.Loading(
-                id="loading-chart",
-                type="circle",
-                children=html.Div([
-                    dcc.Graph(id='chart-plot', config={'scrollZoom': True, 'displayModeBar': False}),
-                ],className="border p-2 my-2 rounded")
-            ), width=12)
-        ]),
-        dbc.Row([
-            dbc.Col(dcc.Loading(
-                id="loading-sum-eases",
-                type="circle",
-                children=html.Div([
-                    dcc.Graph(id='sum-of-eases-plot', config={'scrollZoom': True, 'displayModeBar': False}),
-                ],className="border p-2 my-2 rounded")
-            ), width=12)
-        ]),
-        dbc.Row([
-            dbc.Col(dcc.Loading(
-                id="loading-effr-rate",
-                type="circle",
-                children=html.Div([
-                    dcc.Graph(id='effr-plot', config={'scrollZoom': True, 'displayModeBar': False}),
-                ],className="border p-2 my-2 rounded")
-            ), width=12)
-        ]),
-    ]),
+        html.Div([
+            # --- ROW 1: Main Chart (The Reference) ---
+            # Structure: dbc.Col -> dcc.Loading -> dcc.Graph
+            dbc.Row([
+                dbc.Col(
+                    dcc.Loading(
+                        id="loading-chart",
+                        type="circle",
+                        children=dcc.Graph(
+                            id='chart-plot',
+                            config={'scrollZoom': True, 'displayModeBar': False}
+                        )
+                    ),
+                    className="border p-2 my-2 rounded"
+                )
+            ], className="mb-3"),
+
+            # --- ROW 2: Secondary Chart (Corrected) ---
+            # <<< CHANGE: The structure is now identical to Row 1
+            # Structure: dbc.Col -> [Buttons_Div, dcc.Loading]
+                
+            dbc.Row([
+                dbc.Col(
+                    # The children are now a list containing the buttons and the graph
+                    children=[
+                        # Item 1: The buttons
+                        dcc.Store(id="tab2_2toggle-store", data=DEFAULT_TOGGLE_STATES),
+                        html.Div([
+                            build_button("Sum of eases/ hikes", id="btn-ease_hike", active=DEFAULT_TOGGLE_STATES["btn-ease_hike"]),
+                            build_button("nth Out", id="btn-nth_out", active=DEFAULT_TOGGLE_STATES["btn-nth_out"]),
+                            build_button("Mid Out", id="btn-mid_out",active=DEFAULT_TOGGLE_STATES["btn-mid_out"]),
+                            build_button("1st S12", id="btn-1sts12",active=DEFAULT_TOGGLE_STATES["btn-1sts12"]),
+                            build_button("nth S12", id="btn-nths12",active=DEFAULT_TOGGLE_STATES["btn-nths12"]),
+                            build_button("12th S12", id="btn-12ths12",active=DEFAULT_TOGGLE_STATES["btn-12ths12"]),
+                            build_button("EFFR", id="btn-effr",active=DEFAULT_TOGGLE_STATES["btn-effr"]),
+                        ],
+                        style={
+                            'display': 'flex',
+                            'gap': '0.5rem',
+                            'justifyContent': 'center',
+                            'flexWrap': 'wrap',
+                            'marginBottom': '1rem'
+                        }),
+
+                        # Item 2: The graph
+                        dcc.Loading(
+                            id="loading-sum-eases",
+                            type="circle",
+                            # Use flex-grow to make the graph fill the remaining vertical space
+                            children=dcc.Graph(
+                                id='sum-of-eases-plot',
+                                config={'scrollZoom': True, 'displayModeBar': False},
+                                style={'height': '100%'}
+                            ),
+                            style={'flex-grow': 1}
+                        )
+                    ],
+                    # Styles are applied directly to the dbc.Col
+                    className="border p-2 my-2 rounded",
+                    # style={
+                    #     'height': '500px',
+                    #     'display': 'flex',
+                    #     'flexDirection': 'column'
+                    # }
+                )
+            ]),
+
+            # --- ROW 3: Third Chart ---
+            # Structure: dbc.Col -> dcc.Loading -> dcc.Graph
+            dbc.Row([
+                dbc.Col(
+                    dcc.Loading(
+                        id="loading-effr-rate",
+                        type="circle",
+                        children=dcc.Graph(
+                            id='effr-plot',
+                            config={'scrollZoom': True, 'displayModeBar': False}
+                        )
+                    ),
+                    className="border p-2 my-2 rounded"
+                )
+            ], className="mt-3")
+
+        ], style={'padding': '16px'})
+    ]
+),
 ######################################################## tab3 #############################################################
     
 
@@ -391,13 +491,100 @@ dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
         ])
     ]),
 ############################################################# tab 7 ################################################################        
-    dcc.Tab(label='Matrix Filter', value='tab7',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
+    dcc.Tab(
+    label='Matrix Filter',
+    value='tab7',
+    style={
+        "height": "42px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
+        "marginRight": "4px", "backgroundColor": "#2b2e35", "color": "#c0c4cc",
+        "fontWeight": "500", "border": "1px solid #3a3f4b", "borderBottom": "none",
+        "transition": "background-color 0.3s, color 0.3s"
+    },
+    selected_style={
+        "height": "45px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
+        "backgroundColor": "#1f2128", "color": "#ffffff", "fontWeight": "600",
+        "border": "1px solid #5e636e", "borderBottom": "none",
+        "boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
+    },
+    children=[
+        # Main row for the tab content
+        dbc.Row([
+            # ⬅️ Left Side — Heatmap
+            dbc.Col([
+                dcc.Loading(
+                    id="loading-heatmap",
+                    type="circle",
+                    children=html.Div([
+                        dcc.Graph(id="heatmap-matrix", config={'scrollZoom': True, 'displayModeBar': False}),
+                    ], className="border p-2 my-2 rounded")
+                )
+            ], width=10),
 
-    ),
+            # 🎛️ Right Side — Controls Panel
+            dbc.Col(
+                className="control-panel-1",
+                children=[
+                    html.H5(
+                        "Plot Controls",
+                        style={
+                            "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
+                            "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
+                            "border": "1px solid #3a3f4b", "borderTopLeftRadius": "8px",
+                            "borderTopRightRadius": "8px", "margin": "0"
+                        }
+                    ),
+                    html.Div([
+                        html.Div(
+                            "Matrix view",
+                            className="fw-bold small px-2 py-1",
+                            style={
+                                "backgroundColor": "#1f2128", "borderBottom": "1px solid #3a3f4b",
+                                "borderTopLeftRadius": "6px", "borderTopRightRadius": "6px",
+                                "color": "#c0c4cc", "fontWeight": "500", "textAlign": "center",
+                                "padding": "8px 16px",
+                            }
+                        ),
+                        html.Div([
+                            html.Div([
+                                html.Label("Local Window", className="form-label", style={"width": "68%", "marginBottom": 0}),
+                                dcc.Input(
+                                    id="input-local-window", type="number", min=1, value=21,
+                                    debounce=False, placeholder="#", className="form-control form-control-sm",
+                                    style={"width": "32%"}
+                                )
+                            ], className="d-flex justify-content-between mb-2"),
+
+                            html.Div([
+                                html.Label("Curve Length", className="form-label", style={"width": "68%", "marginBottom": 0}),
+                                dcc.Input(
+                                    id="input-curve-length", type="number", min=4, value=15,
+                                    debounce=False, placeholder="#", className="form-control form-control-sm",
+                                    style={"width": "32%"}
+                                )
+                            ], className="d-flex justify-content-between mb-2"),
+                        ], style={"padding": "12px 10px 10px 10px"})
+
+                    ], style={
+                        "border": "1px solid #3a3f4b", "borderRadius": "6px",
+                        "backgroundColor": "#2b2e35", "margin": "10px 0 18px 0"
+                    }),
+
+                    html.Label("Metric", className="form-label mt-3", style={"textAlign": "center"}),
+                    dbc.ButtonGroup([
+                        dbc.Button("Z-Score", id="btn-zscore", color="secondary", outline=True),
+                        dbc.Button("Percentile", id="btn-percentile", color="secondary", outline=True), 
+                        dbc.Button("Risk/Reward", id="btn-riskreward", color="secondary", outline=True),
+                        dbc.Button("OI", id="btn-oi", color="secondary", outline=True),
+                    ], vertical=True, className="mb-3 w-100"), # Added w-100 to make buttons fill width
+
+                    html.Div(id="matrix-filter-info", className="text-muted small mt-2")
+                ],
+                width=2
+            )
+        ])
+    ]
+),
+
 
 
 
@@ -526,12 +713,12 @@ def update_curve_plot(stored, active_flags, Settle_days, date1, date2, win_local
         bb_std=bb_std if plot_flags["BB"] else None
     )
 
-# ------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------------
 # CALLBACK: Single Structure Plot (Tab 2)
-# ------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------------------------
+
 @app.callback(
-    [Output('chart-plot', 'figure'),
-    Output('sum-of-eases-plot', 'figure')],
+    Output('chart-plot', 'figure'),
     Input('stored-data', 'data'),
     prevent_initial_call=True
 )
@@ -540,10 +727,48 @@ def update_chart_tab(stored):
         return warning_plot("Series data not availbale (no stored data)")
     
     s = stored['series']
-   
     series = pd.Series(data=s['values'], index=pd.to_datetime(s['index']))
     #print(series.head())
     str_name = f"{stored['comdty']}{stored['str_name']}({stored['str_number']})"
+    return plot_single_structure(series, str_name)
+
+##################### tab 2_2 #############################################################################
+
+@app.callback(
+    Output("tab2_2toggle-store", "data"),
+    [Input(btn_id, "n_clicks") for btn_id in BUTTON_IDS],
+    State("tab2_2toggle-store", "data"),
+    prevent_initial_call=True
+)
+def toggle_buttons(*args):
+    store = args[-1] or {}
+    triggered_id = ctx.triggered_id
+    if triggered_id:
+        current = store.get(triggered_id, False)
+        store[triggered_id] = not current
+    return store
+
+
+@app.callback(
+    [Output(btn_id, "className") for btn_id in BUTTON_IDS],
+    Input("tab2_2toggle-store", "data")
+)
+def update_classnames(store):
+    return [get_button_class(store.get(btn_id, False)) for btn_id in BUTTON_IDS]
+
+
+@app.callback(
+    Output('sum-of-eases-plot', 'figure'),
+    Input('stored-data', 'data'),
+    Input('tab2_2toggle-store', 'data'),
+    Input('tabs', 'value'), # Optional
+    prevent_initial_call=True
+)
+def update_tab_2_2(stored, toggle_store, tab):
+
+    if not stored:
+        return warning_plot("⚠ Series data not availbale (no stored data)")
+    
     comdty= stored["comdty"]
     out_df = pd.DataFrame( 
         data=stored["out_df"]["data"],
@@ -551,13 +776,71 @@ def update_chart_tab(stored):
         columns=stored["out_df"]["columns"]
     )
     lookback_prd= stored["lookback_prd"]
-    # sum of ease/ hike limited upto first 8 S3s
-    #print(comdty)
-    if comdty in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
-        sum_of_ease_or_hikes= pd.Series(dtype='float64')
-    else:
-        sum_of_ease_or_hikes= cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
-    return plot_single_structure(series, str_name),plot_single_structure(sum_of_ease_or_hikes, "sum of eases/ hikes")
+    
+
+    fig2_2= plot_chart_2_2()
+    active_buttons = 0
+    for btn in BUTTON_IDS:
+        if toggle_store.get(btn, False):
+            active_buttons += 1
+    if(active_buttons==0):
+        return warning_plot("⚠ No series selected")
+
+    chart2_1_series = stored['series']
+    chart2_1_series = pd.Series(data=chart2_1_series['values'], index=pd.to_datetime(chart2_1_series['index']))
+    
+    if toggle_store.get("btn-ease_hike", False):
+        if comdty == "meets":
+            sum_of_ease_or_hikes= cal_sum_of_same_sign_meets(out_df,comdty, lookback_prd )
+        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA"}:
+            sum_of_ease_or_hikes= cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
+        else:
+            sum_of_ease_or_hikes= pd.Series(dtype='float64')
+
+        corr= compute_correlation_parameters(chart2_1_series, sum_of_ease_or_hikes)
+        
+
+        add_chart_2_2(fig2_2, sum_of_ease_or_hikes,corr, legend="sum of eases/ hikes" , color= "blue")
+
+    if toggle_store.get("btn-nth_out", False):
+        nth_out= Out_tab2_2(out_df, stored['str_number'], lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, nth_out)
+        add_chart_2_2(fig2_2, nth_out,corr, legend="nth Out", color= "orange")
+    
+    if toggle_store.get("btn-mid_out", False):
+        n= stored['str_number'] + int (len(get_ratio(stored['str_name'])) /2)
+        mid_out= Out_tab2_2(out_df, n, lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, mid_out)
+        add_chart_2_2(fig2_2, mid_out, corr,legend="Mid Out", color= "yellow")
+    # for btn in BUTTON_IDS:
+    #     print(btn,toggle_store.get(btn))
+    if toggle_store.get("btn-1sts12", False):
+        firstS12= S12_tab2_2(out_df, 1 , lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, firstS12)
+        add_chart_2_2(fig2_2, firstS12,corr, legend="1st S12", color= "skyblue")
+
+    if toggle_store.get("btn-nths12", False):
+        n= stored['str_number'] + int (len(get_ratio(stored['str_name'])) /2)
+        nthS12= S12_tab2_2(out_df, n, lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, nthS12)
+        add_chart_2_2(fig2_2, nthS12,corr, legend="nth S12", color= "green")
+
+    if toggle_store.get("btn-12ths12", False):
+        twelthS12= S12_tab2_2(out_df, 12, lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, twelthS12)
+        add_chart_2_2(fig2_2, twelthS12,corr, legend="12th S12", color= "brown")   
+
+    if toggle_store.get("btn-effr", False):
+        effr= pd.Series() #effr(lookback_prd)
+        corr= compute_correlation_parameters(chart2_1_series, effr)
+        add_chart_2_2(fig2_2, effr,corr, legend="EFFR", color= "black")  
+    
+    return fig2_2
+
+
+
+
+
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -688,7 +971,7 @@ def classify_and_store(stored, base_str, sum_first_n_base, hike_threshold, ease_
         hike_threshold=hike_threshold,
         dovish_threshold=ease_threshold,
     )
-
+    
     return {
         "hike": list(hike_cycle),
         "ease": list(ease_cycle),

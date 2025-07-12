@@ -79,6 +79,7 @@ def compute_stats(series):
 
 
 def get_percentile(series, pc):
+    series = pd.to_numeric(series, errors='coerce').dropna()
     return np.percentile(series, pc).round(1)
 
 
@@ -163,7 +164,7 @@ def classify_cycle(series,comdty, out_df,lookback_prd, base_str, sum_first_n_bas
 
     ##base_df= series
     base_df, comdty= process_help_calculation(comdty, out_df, base_str, lookback_prd, 15)
-
+    
     for date, row in base_df.iterrows():
         if base_df.index.min() > date:
             break
@@ -192,6 +193,7 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
     Plot KDE with optional overlays (median, mode, BB, local stats, value line).
     """
     lbp = min(len(series), lookback_prd)
+    #print(len(series))
     title = f"{Comdty}{str_name}({str_number})@{lbp}d"
     latest_value = round(series.iloc[0], 2)
     stats = compute_stats(series)
@@ -319,8 +321,10 @@ def plotted(plot_flags,Comdty,str_name,str_number, sub_series, full_series, pc_l
         add_band_mask(fig, stats['mean'] - 2 * stats['std'], stats['mean'] + 2 * stats['std'], "KDE", name=f"bb (σ=2)")
 
     if plot_flags.get("band68", 1):
+        
         l= get_percentile(sub_series, 17)
         u= get_percentile(sub_series, 83)
+        #print("l", l, "u", u)
         add_band_mask(fig, l, u, "KDE", name=f"band68")
 
     if plot_flags.get("band95", 1):

@@ -1,6 +1,9 @@
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
+import dash_bootstrap_components as dbc
+import dcor
+
 from curve_help import moving_average, bollinger_bands, maxmin_band, median_series, rolling_quantile_series
 from str_cal import load_data, fill_missing_values, get_ratio, calculate_str, remove_outliers, rolling_bounds_filter,process_help_calculation
 import str_cal as strtr
@@ -178,6 +181,18 @@ def generate_curve_plot(str_df,plot_title,win_local,bb_std,quantile,Settle,date1
     return fig
 
 
+########################################################################## tab 2 #####################################################################################
+def get_button_class(is_active: bool) -> str:
+    base = "tab-button me-2"
+    return base + " selected" if is_active else base
+
+def build_button(label, id, active=False):
+    return dbc.Button(
+        label,
+        id=id,
+        className=get_button_class(active), 
+        n_clicks=0
+    )
 
 
 
@@ -204,7 +219,7 @@ def plot_single_structure(series, str_name):
     latest_x = series.index[0]
     latest_y = series.values[0]
     y0 = latest_y  #latest level
-    latest_percentile= get_rank(series , y0)
+   
     fig.add_shape(
         type="line",
         x0=min(series.index), x1=max(series.index),
@@ -251,7 +266,18 @@ def plot_single_structure(series, str_name):
         #borderpad=4,
         opacity=0.95
     )
-    
+
+    latest_percentile= get_rank(series , y0)
+    #print(y0, series.head(), latest_percentile)
+    fig.add_annotation(
+        x=latest_x,
+        y=y0,
+        text=f"Pctl: ({str(round(latest_percentile))}%)",
+        showarrow=False,
+        xshift=10,
+        yshift=20,
+        font=dict(size=10, color="grey")
+    )
 
 
     # Enable cross‑hair spikes
@@ -270,12 +296,12 @@ def plot_single_structure(series, str_name):
         spikesnap='cursor'
     )
     fig.update_layout(
-        #title=dict(text=title, x=0.5, y=0.99, xanchor="center"), font=dict(size=14,  color= "#1f2128")
-        title={"text": f"{str_name}", "x": 0.5, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
+        #title=dict(text=title, x=0.5, y=0.90, xanchor="center"), font=dict(size=14,  color= "#1f2128")
+        title={"text": f"{str_name}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
         #xaxis_title="Date",
         #yaxis_title="Structure Value",
-        height=500,
-        margin=dict(l=10, r=10, t=30, b=20),
+        height=450,
+        margin=dict(l=10, r=10, t=15, b=5),
         hovermode='x',
         xaxis=dict(showgrid=True, tickformat="%d-%m-%y"),
         #config={'displayModeBar': False}
@@ -309,8 +335,17 @@ def compute_conditional_sum(df, max_cols=8):
 
 def cal_sum_of_eases_hikes(out_df, comdty, lookback_prd):
     S3_df, comdty = process_help_calculation(comdty, out_df, "S3", lookback_prd, 15)
-    sum_of_eases_hikes_series = compute_conditional_sum(S3_df)
+    sum_of_eases_hikes_series = compute_conditional_sum(S3_df,8)
+    sum_of_eases_hikes_series= sum_of_eases_hikes_series.head(lookback_prd)
+    index = out_df.index[:lookback_prd]
+    return pd.Series(sum_of_eases_hikes_series, index=index)
+
+def cal_sum_of_same_sign_meets(out_df, comdty, lookback_prd):
+    Out_df, comdty = process_help_calculation(comdty, out_df, "Out", lookback_prd, 15)
+    sum_of_eases_hikes_series = compute_conditional_sum(Out_df,15)
     return pd.Series(sum_of_eases_hikes_series, index=out_df.index)
+
+
 
 
 
@@ -332,3 +367,182 @@ def warning_plot_copy2(warning):
     fig.update_xaxes(fixedrange=True)
     return fig
 
+
+##################################### tab2_2 #############################################################
+def plot_chart_2_2():
+    fig = go.Figure()
+    # Enable cross‑hair spikes
+    fig.update_xaxes(
+        showspikes=True,
+        spikemode='across',
+        spikecolor='grey',
+        spikethickness=1,
+        spikesnap='cursor'
+    )
+    fig.update_yaxes(
+        showspikes=True,
+        spikemode='across',
+        spikecolor='grey',
+        spikethickness=1,
+        spikesnap='cursor'
+    )
+    fig.update_layout(
+        height=450,
+        margin=dict(l=10, r=10, t=10, b=20),
+        hovermode='x',
+        xaxis=dict(showgrid=True, tickformat="%d-%m-%y"),
+        #config={'displayModeBar': False}
+    )
+    fig.update_yaxes(fixedrange=True)
+    fig.update_xaxes(fixedrange=True)
+    return fig
+
+
+def add_chart_2_2(fig, series,corr, legend, color= "purple", axis= "1st"):
+    if series.empty or series.dropna().empty: 
+        print("empty series")
+        return
+    # Ensure index is datetime for x-axis formatting
+    if not pd.api.types.is_datetime64_any_dtype(series.index):
+        #print("plot single",series.index)
+        series.index = pd.to_datetime(series.index, errors='coerce')
+
+    series = pd.to_numeric(series, errors='coerce')
+    series= rolling_bounds_filter(series, window=21, k=2.5)
+
+    # Add horizontal line at y = y0 parallel to x axis
+    latest_x = series.index[0]
+    latest_y = series.values[0]
+    y0 = latest_y  #latest level
+    latest_percentile= get_rank(series , y0)
+    fig.add_shape(
+        type="line",
+        x0=min(series.index), x1=max(series.index),
+        y0=y0, y1=y0,
+        line=dict(color="red", width=1, dash="solid"),
+    )
+
+
+    fig.add_trace(go.Scatter(
+        x=series.index,
+        y=series.values,
+        name= legend,
+        mode='lines',
+        line=dict(
+            color= color,
+            dash='solid'
+        ),
+        connectgaps=False,  # Ensures NaNs are not connected
+        opacity=1,
+        hovertemplate='%{y:.0f}<extra></extra>'  # <-- force numeric format
+    ))
+    
+    
+
+    fig.add_annotation(
+        x=latest_x,
+        y=latest_y,
+        text= f"<b>{str(round(latest_y))}</b>",       # same formatting as hover
+        showarrow=True,
+        arrowhead=0,
+        arrowsize=1,
+        ax=20,
+        ay=0,
+        font=dict(
+            family="Arial",
+            size=12,
+            color="white",
+        ),
+        align="center",
+        bgcolor="blue",     # match hover background
+        opacity=0.95
+    )
+    
+    latest_percentile= get_rank(series , y0)
+    #print(y0, series.head(), latest_percentile)
+    fig.add_annotation(
+        x=latest_x,
+        y=y0,
+        text=f"Pctl: ({str(round(latest_percentile))}%)",
+        showarrow=False,
+        xshift=5,
+        yshift=25,
+        font=dict(size=10, color="grey")
+    )
+    #print(corr["mean_rolling_correlation"], corr["distance_correlation"])
+    fig.add_annotation(
+        x=latest_x,
+        y=y0,
+        text=f"Corr: ({round(corr['mean_rolling_correlation'],1)})",
+        showarrow=False,
+        xshift=5,
+        yshift= 15,
+        font=dict(size=10, color="grey")
+    )
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",          # horizontal legend
+            yanchor="bottom",
+            y=0.96,                   # position just above the top of the chart
+            xanchor="center",
+            x=0.5
+        )
+    )
+
+    return fig
+
+
+
+
+def Out_tab2_2(out_df, str_number, lookback_prd):
+    series = out_df.iloc[:, str_number-1].head(lookback_prd)
+    rolling_bounds_filter(series, window=21, k=2.5)
+    return series
+
+def S12_tab2_2(out_df, n, lookback_prd):
+    if n + 2 >= out_df.shape[1]:
+        print( "n+3 column index exceeds DataFrame width")
+        return pd.series()
+    series = (out_df.iloc[:lookback_prd,n-1] - out_df.iloc[:lookback_prd, n+3])*100
+    #print(series.head(), len(series))
+    series= rolling_bounds_filter(series, window=21, k=2.5)
+    return series
+
+
+
+
+def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolling_window: int = 21):
+    """
+    The window size for the rolling correlation calculation is 21
+    'mean_rolling_correlation': The average of the rolling Pearson correlation.
+                            [-1,+1] [perfect inverse correlation, perfect positive correlation]
+    'distance_correlation' : captures both linear and non-linear relationships.
+                            [0,1] (statistical independence) to 1.
+    """
+    if not isinstance(series1, pd.Series) or not isinstance(series2, pd.Series):
+        print( "Inputs must be pandas Series.")
+        return {"mean_rolling_correlation": None,"distance_correlation": None}
+
+    if len(series1) != len(series2):
+        print(f"Input series must have the same length {len(series1)}, {len(series2)}")
+        return {"mean_rolling_correlation": None,"distance_correlation": None}
+
+    if len(series1) < rolling_window:
+        print(f"Input series length ({len(series1)}) cannot be less than the rolling window size ({rolling_window}).")
+        return {"mean_rolling_correlation": None,"distance_correlation": None}
+
+    # This creates a new series where each point is the correlation of the preceding 'window' data points.
+    rolling_corr = series1.rolling(window=rolling_window).corr(series2)
+    # The first (window - 1) values will be NaN, so we drop them before calculating the mean.
+    mean_rolling_corr = rolling_corr.dropna().mean()
+
+    # --- 3. Distance Correlation (dCor) ---
+    # dCor is powerful because it is zero if and only if the series are truly independent.
+    # It captures non-linear and non-monotonic relationships that standard correlation would miss.
+    dist_corr = dcor.distance_correlation(series1.values, series2.values)
+
+    return {
+        'mean_rolling_correlation': mean_rolling_corr,
+        'distance_correlation': dist_corr
+    }
