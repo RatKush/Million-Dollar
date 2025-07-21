@@ -127,7 +127,7 @@ def fill_missing_values(df):
     return df.apply(_fill_mid_nan, axis=1)
 
 
-def load_data(lookback_prd, filepath="SR3_ED.xlsxm"):
+def load_data(lookback_prd, filepath="SR3_ED.xlsm"):
     """
     Load structured curve data from Excel, trimming to lookback_prd columns 
     for speed. Returns a DataFrame indexed by date, with one column per contract.
@@ -224,15 +224,16 @@ def _rolling_sumproduct(row, ratio):
 index = [
     "Out", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
     "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
-    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1"
+    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1",
+    
 ]
 
 ratio= [
-    [0.01],
-    [1, -1],
-    [1, 0, -1],
-    [1, 0, 0, 0, -1],
-    [1, -2, 1],
+    [0.01],                                     # "Out"
+    [1, -1],                                    # "S3"
+    [1, 0, -1],                                 # "S6"
+    [1, 0, 0, 0, -1],                           # "S12"
+    [1, -2, 1],                                 # "L3"
     [1, -1, -1, 1],
     [1, -1, -1, 1],
     [1, 0, -2, 0, 1],
@@ -267,3 +268,28 @@ ratio_table = pd.DataFrame(ratio, index=index)
 # out_df, str_df, series,cmdty, str_name, str_num= process_structure("SR3.xlsx", "S3", 8, 20, 15)
 # df= rolling_bounds_filter(out_df, window=21, k=2.5)
 # print(out_df)
+
+
+################################### fetch effr ######################################
+def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lookback_prd=250):
+    df = pd.read_excel(filepath, sheet_name = sheetname, header= None)
+     
+    max_cols = min(df.shape[1]-1, lookback_prd+22)
+    df = df.iloc[0:25, 1 : max_cols]
+
+    #columns names  from top row i.e row 3
+    xl_dates = pd.to_numeric(df.iloc[2, 0:].values, errors='coerce')
+    dates = pd.to_datetime(xl_dates, unit='D', origin='1899-12-30')
+
+    # final data container
+    rates_df= df.iloc[[3,9,15,21]].copy()  # 2Yr, 5Yr, 10Yr, rates
+    rates_df.index = ["2Yr", "5Yr", "10Yr", "Rates"]
+    rates_df.columns= dates
+    for i in range(len(rates_df) - 1): # passing all except rates row
+        rates_df.iloc[i]= rolling_bounds_filter(rates_df.iloc[i], window=21, k=2.5)
+
+    max_cols = min(rates_df.shape[1]-1 , lookback_prd)
+    rates_df= rates_df.iloc[:, 0:max_cols].copy()
+    #print(rates_df.head(), rates_df.shape)
+    
+    return rates_df

@@ -1,4 +1,5 @@
 import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
 from datetime import datetime
 import dash_bootstrap_components as dbc
@@ -124,8 +125,7 @@ def generate_curve_plot(str_df,plot_title,win_local,bb_std,quantile,Settle,date1
 
     fig = init_plot(plot_title)
 
-    if plot_flags.get("Latest"):
-        fig = add_plot_study(fig, "Latest", {"type": "line", "data": str_df.iloc[0], "color": "blue"}, zorder=1000)
+    
 
     if plot_flags.get("Settle"):
         fig = add_plot_study(fig, f"settle(-{Settle})", {"type": "line", "data": str_df.iloc[Settle], "color": "gold"}, zorder=999)
@@ -177,6 +177,10 @@ def generate_curve_plot(str_df,plot_title,win_local,bb_std,quantile,Settle,date1
         xn = maxmin_band(str_df, win_xn)
         fig = add_plot_study(fig, f"xn({win_xn})", xn, zorder=20)
 
+
+
+    if plot_flags.get("Latest"):
+        fig = add_plot_study(fig, "Latest", {"type": "line", "data": str_df.iloc[0], "color": "blue"}, zorder=1000)
     #fig.show(config={"scrollZoom": True})
     return fig
 
@@ -211,7 +215,8 @@ def plot_single_structure(series, str_name):
 
     fig = go.Figure()
     series = pd.to_numeric(series, errors='coerce')
-    series= rolling_bounds_filter(series, window=21, k=2.5)
+    series= rolling_bounds_filter(series, window=21, k=2)
+    print(series.max)
     #series= remove_outliers(series, 0.01, 0.99)
     #print(series)
     #print(series.loc["2024-01-17"])
@@ -343,6 +348,10 @@ def cal_sum_of_eases_hikes(out_df, comdty, lookback_prd):
 def cal_sum_of_same_sign_meets(out_df, comdty, lookback_prd):
     Out_df, comdty = process_help_calculation(comdty, out_df, "Out", lookback_prd, 15)
     sum_of_eases_hikes_series = compute_conditional_sum(Out_df,15)
+    # print("len1", len(sum_of_eases_hikes_series))
+    # print("lb", lookback_prd)
+    sum_of_eases_hikes_series= sum_of_eases_hikes_series.iloc[:lookback_prd]
+    out_df= out_df.iloc[:lookback_prd]
     return pd.Series(sum_of_eases_hikes_series, index=out_df.index)
 
 
@@ -398,7 +407,7 @@ def plot_chart_2_2():
     return fig
 
 
-def add_chart_2_2(fig, series,corr, legend, color= "purple", axis= "1st"):
+def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #purple
     if series.empty or series.dropna().empty: 
         print("empty series")
         return
@@ -470,15 +479,16 @@ def add_chart_2_2(fig, series,corr, legend, color= "purple", axis= "1st"):
         font=dict(size=10, color="grey")
     )
     #print(corr["mean_rolling_correlation"], corr["distance_correlation"])
-    fig.add_annotation(
-        x=latest_x,
-        y=y0,
-        text=f"Corr: ({round(corr['mean_rolling_correlation'],1)})",
-        showarrow=False,
-        xshift=5,
-        yshift= 15,
-        font=dict(size=10, color="grey")
-    )
+    if corr['mean_rolling_correlation'] is not None:
+        fig.add_annotation(
+            x=latest_x,
+            y=y0,
+            text=f"Corr: ({round(corr['mean_rolling_correlation'],1)})",
+            showarrow=False,
+            xshift=5,
+            yshift= 15,
+            font=dict(size=10, color="grey")
+        )
 
     fig.update_layout(
         legend=dict(
@@ -501,17 +511,25 @@ def Out_tab2_2(out_df, str_number, lookback_prd):
     return series
 
 def S12_tab2_2(out_df, n, lookback_prd):
-    if n + 2 >= out_df.shape[1]:
+    #print(out_df.shape)
+    if n + 3 >= out_df.shape[1]:
         print( "n+3 column index exceeds DataFrame width")
-        return pd.series()
+        return pd.Series()
     series = (out_df.iloc[:lookback_prd,n-1] - out_df.iloc[:lookback_prd, n+3])*100
+    #print(series.head(), len(series))
+    series= rolling_bounds_filter(series, window=21, k=2.5)
+    return series
+def L6_tab2_2(out_df, n, lookback_prd):
+    if n + 2 >= out_df.shape[1]:
+        print( "n+2 column index exceeds DataFrame width")
+        return pd.series()
+    series = (out_df.iloc[:lookback_prd,n-1] - 2* out_df.iloc[:lookback_prd, n+1]+ out_df.iloc[:lookback_prd, n+3])*100
     #print(series.head(), len(series))
     series= rolling_bounds_filter(series, window=21, k=2.5)
     return series
 
 
-
-
+import numpy as np
 def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolling_window: int = 21):
     """
     The window size for the rolling correlation calculation is 21
@@ -520,10 +538,12 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
     'distance_correlation' : captures both linear and non-linear relationships.
                             [0,1] (statistical independence) to 1.
     """
+    
+        
     if not isinstance(series1, pd.Series) or not isinstance(series2, pd.Series):
         print( "Inputs must be pandas Series.")
         return {"mean_rolling_correlation": None,"distance_correlation": None}
-
+    #print(f"Input series must have the same length {len(series1)}, {len(series2)}")
     if len(series1) != len(series2):
         print(f"Input series must have the same length {len(series1)}, {len(series2)}")
         return {"mean_rolling_correlation": None,"distance_correlation": None}
@@ -531,7 +551,11 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
     if len(series1) < rolling_window:
         print(f"Input series length ({len(series1)}) cannot be less than the rolling window size ({rolling_window}).")
         return {"mean_rolling_correlation": None,"distance_correlation": None}
-
+    
+    series1 = pd.to_numeric(series1, errors="coerce")
+    series2 = pd.to_numeric(series2, errors="coerce")
+    series1.replace([np.inf, -np.inf], np.nan, inplace=True)
+    series2.replace([np.inf, -np.inf], np.nan, inplace=True)
     # This creates a new series where each point is the correlation of the preceding 'window' data points.
     rolling_corr = series1.rolling(window=rolling_window).corr(series2)
     # The first (window - 1) values will be NaN, so we drop them before calculating the mean.
@@ -547,3 +571,125 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
         'mean_rolling_correlation': mean_rolling_corr,
         'distance_correlation': dist_corr
     }
+
+
+######################################################## 2_3 ################################
+def plot_chart_2_3():
+    fig = go.Figure()
+    # Enable cross‑hair spikes
+    
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor="#ececec",
+        #zeroline=False,
+        #showspikes=True,
+        spikemode='across',
+        spikecolor='grey',
+        spikethickness=1,
+        spikesnap='cursor'
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        showspikes=True,
+        gridcolor="#ececec",
+        #showspikes=True,
+        spikemode='across',
+        spikecolor='grey',
+        spikethickness=1,
+        spikesnap='cursor'
+    )
+    fig.update_layout(
+        height=450,
+        margin=dict(l=10, r=10, t=10, b=20),
+        hovermode='closest',
+        #xaxis=dict(showgrid=True, tickformat="%d-%m-%y"),
+        legend=dict(
+            orientation="h",          # horizontal legend
+            yanchor="bottom",
+            y=0.96,                   # position just above the top of the chart
+            xanchor="center",
+            x=0.5
+        )
+        #config={'displayModeBar': False}
+    )
+    fig.update_yaxes(fixedrange=True)
+    fig.update_xaxes(fixedrange=True)
+    return fig
+
+
+def add_chart_2_3(fig, series_Y, series_base, legend, color= "#f58231", axis= "1st"): #purple
+    
+    if series_Y.empty or series_Y.dropna().empty or series_base.empty or series_base.dropna().empty: 
+        print("empty series")
+        return
+    if len(series_Y) != len(series_base):
+        print(f"Input series must have the same length {len(series_Y)}, {len(series_base)}")
+        return
+    
+    series_Y = pd.to_numeric(series_Y, errors='coerce')
+    series_Y= rolling_bounds_filter(series_Y, window=21, k=2)
+    series_base = pd.to_numeric(series_base, errors='coerce')
+    series_base= rolling_bounds_filter(series_base, window=21, k=2)
+
+
+   
+    df = pd.DataFrame({'x': series_base, 'y': series_Y}).dropna()
+    fig.add_trace(go.Scatter(
+        x= df['x'],
+        y= df['y'],
+        name= legend,
+        mode='markers',
+        marker=dict(
+            size=8,
+            color= color,
+            symbol='circle',
+            opacity=1,
+        ),
+        hovertemplate=f"<b>{legend}</b><br>X : %{{x:.0f}}<br>Y : %{{y:.0f}}<extra></extra>",
+        customdata=df.index
+    ))
+     
+    # --- Add Optional Mean Lines for Context ---
+    mean_x = df['x'].mean()
+    mean_y = df['y'].mean()
+    
+    # Vertical mean line
+    fig.add_shape(type="line", x0=mean_x, x1=mean_x, y0=df['y'].min(), y1=df['y'].max(),
+                    line=dict(color="grey", width=1.5, dash="dash"))
+    # Horizontal mean line
+    fig.add_shape(type="line", x0=df['x'].min(), x1=df['x'].max(), y0=mean_y, y1=mean_y,
+                    line=dict(color="grey", width=1.5, dash="dash"))
+        
+
+    latest_x = series_base.iloc[0]
+    latest_y = series_Y.iloc[0]
+    # Add a new trace specifically for the single point
+    fig.add_trace(go.Scatter(
+        x=[latest_x],  # Must be in a list or array
+        y=[latest_y],  # Must be in a list or array
+        mode='markers',
+        name='Latest', # This will appear in the legend
+        marker=dict(
+            size=14,            # Make it larger to stand out
+            color='red',        # Use a distinct color
+            symbol='star',      # Use a different symbol (e.g., star, diamond)
+            #line=dict(width=2, color='darkred') # Add a border to the marker
+        ),
+        showlegend=False,
+        hovertemplate="<b>Latest</b><br>X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>"
+    ))
+
+
+
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",          # horizontal legend
+            yanchor="bottom",
+            y=0.96,                   # position just above the top of the chart
+            xanchor="center",
+            x=0.5
+        )
+    )
+
+    return fig

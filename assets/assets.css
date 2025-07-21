@@ -15,27 +15,6 @@ div.tab--selected:hover {
 
 /*  ************************************************* kde control panell ******************************************************************/
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #kde-flags-shared-wrapper {
     position: absolute;
     top: 140px;
@@ -56,8 +35,9 @@ div.tab--selected:hover {
     border: 1px solid #3a3f4b;       /* Same border as tab borders */
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;            /* Soft rounded corners */
-
-    padding: 16px 12px;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    padding: 8px 4px;
     /*margin-top: 8px;*/
     margin-bottom: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); /* Soft shadow */
@@ -102,39 +82,96 @@ div.tab--selected:hover {
 
 /*##################################################### tab 2 buttons #######################################################*/
 /* Button styling for chart tab toggle buttons */
+
 .tab-button {
-    height: 32px;
-    border-radius: 8px 8px 0 0;
-    padding: 4px 16px;
-    margin-right: 4px;
     background-color: #2b2e35;
     color: #c0c4cc;
-    font-weight: 350;
     border: 1px solid #3a3f4b;
-    border-bottom: none;
+    border-radius: 8px;
+    font-weight: 350;
     transition: background-color 0.3s, color 0.3s;
+    height: 32px;
+    margin-right: 5px;
     cursor: pointer;
+
+    padding: 4px 16px;
 }
 
-.tab-button.selected {
-    height: 34px;
+.tab-button:hover {
     background-color: #1f2128;
-    color: #ffffff;
-    font-weight: 400;
-    border: 1px solid #5e636e;
-}
-
-/*  Hover (applies to both) */
-.tab-button:hover,
-.tab-button.selected:hover {
-    background-color: #2b2e35;
     color: #c0c4cc;
     border-top: 1px solid rgba(255, 255, 255, 0.2) ;
-    border-left:  1px solid rgba(255, 255, 255, 0.2) ;
-    border-right:  1px solid rgba(255, 255, 255, 0.2) ;
-    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid #2b2e35;
+    height: 34px;
+    font-weight: 400;
 }
+
+
+.tab-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border-top: 1px solid #5e636e;
+    border-right: 1px solid #5e636e;
+    border-left: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+
+.tab-button.selected{
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+/*  Hover (applies to both) */
 .tab-button.selected:hover {
+    background-color: #2b2e35;
+    color:  #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2) ;
+  
+}
+
+
+/*################################################### tab7 buttons #########################################################*/
+
+.tab7-button {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 8px !important;  /* override Bootstrap */
+    font-weight: 350;
+    transition: background-color 0.3s, color 0.3s;
+    width: 100%;
+    cursor: pointer;
+    margin: 5px 0 5px 0
+}
+
+.tab7-button:hover {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab7-button.selected,
+.tab7-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    font-weight: 400;
+}
+
+.tab7-button.selected:hover,
+.tab7-button.active:hover {
     background-color: #1f2128;
     color: #ffffff;
 }
+
+
+
+
+
+
+
