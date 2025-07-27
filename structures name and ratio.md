@@ -31,9 +31,9 @@ D12                     | L12 - L12(n+4)                [1, 0, 0, 0, -3, 0, 0, 0
 
 E3                      | D3 - D3(n+1)                  [1, -4, 6, -4, 1]
 E6(I)                   | D6 - D6(n+1)                  [1, -1, -3, 3, 3, -3, -1, 1]
-# E6(II)                  | D6 - D6(n+2)                  [1, 0, -4, 0, 6, 0, -4, 0, 1]
+E6(II)                  | D6 - D6(n+2)                  [1, 0, -4, 0, 6, 0, -4, 0, 1]
 
-# 1X Sn- 2X Sn+1          | VIX / VOXX specific           [1, -3, 2]
-# 2X Sn- 1X Sn+1          | VIX / VOXX specific           [2, -3, 1]
-# 2X Sn- 3X Sn+1          | VIX / VOXX specific           [2, -5, 3]
-# 3X Sn- 2X Sn+1          | VIX / VOXX specific           [3, -5, 2]
+1X Sn- 2X Sn+1          | VIX / VOXX specific           [1, -3, 2]
+2X Sn- 1X Sn+1          | VIX / VOXX specific           [2, -3, 1]
+2X Sn- 3X Sn+1          | VIX / VOXX specific           [2, -5, 3]
+3X Sn- 2X Sn+1          | VIX / VOXX specific           [3, -5, 2]
