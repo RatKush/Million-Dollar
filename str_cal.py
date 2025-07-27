@@ -148,8 +148,8 @@ def load_data(lookback_prd, filepath="SR3_ED.xlsm"):
     #print(out_curve_df)
     return out_curve_df
 
-
-
+################################################################# outliers rempal fn ######################
+#1 removes lower and upper 0.1 percentiles data
 def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     q_low = df.quantile(lower_quantile)
     q_high = df.quantile(upper_quantile)
@@ -159,10 +159,11 @@ def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     print("CALCULATED")
     return df_cleaned.interpolate(method='linear', limit_direction='both', axis=0)
 
-## use it in place of remove  outliers  for a df  # rolling mean ± k*std.
-
+## 2  outliers  for a df  # rolling mean ± k*std.         ### not that robust ----- sometimes outliers hides themselves due to high std causeed by themselves
 def process_series(series, window=21, k=2.5):
     series = pd.to_numeric(series, errors='coerce')
+    # Keep track of where the original NaNs were
+    original_nans = series.isna()
     rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
     rolling_std = series.rolling(window=window, center=True,  min_periods=5).std()
     upper_bound = rolling_mean + k * rolling_std
@@ -172,7 +173,13 @@ def process_series(series, window=21, k=2.5):
     filtered = series.copy()
     filtered[mask] = np.nan
     
-    return filtered.interpolate(method='linear', limit_direction='both', axis=0)
+     # Interpolate to fill only the new NaNs created by the filter
+    interpolated = filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+    # Re-apply the original NaNs so the tail remains empty
+    interpolated[original_nans] = np.nan
+    
+    return interpolated
 
 
 def rolling_bounds_filter(df, window=21, k=2.5):
@@ -183,9 +190,56 @@ def rolling_bounds_filter(df, window=21, k=2.5):
     else:
         raise TypeError("Input must be a pandas Series or DataFrame")
 
+####3 IQR
+def process_series_iqr(series, window=21, k=1.5):
+    """
+    Processes a single pandas Series to filter outliers using the rolling IQR method.
+    
+    This function identifies outliers, replaces them with NaN, interpolates the new 
+    gaps, and then restores any NaN values that existed in the original series.
+    """
+    # Ensure data is numeric, converting non-numeric values to NaN
+    series = pd.to_numeric(series, errors='coerce')
+    
+    # Keep track of where the original NaNs were to restore them later
+    original_nans = series.isna()
+
+    # Calculate rolling Q1 (25th percentile) and Q3 (75th percentile)
+    q1 = series.rolling(window=window, center=True, min_periods=5).quantile(0.25)
+    q3 = series.rolling(window=window, center=True, min_periods=5).quantile(0.75)
+    
+    # Calculate the rolling Interquartile Range (IQR)
+    iqr = q3 - q1
+    
+    # Define the upper and lower outlier boundaries
+    upper_bound = q3 + k * iqr
+    lower_bound = q1 - k * iqr
+    
+    # Create a boolean mask to identify outliers
+    outlier_mask = (series < lower_bound) | (series > upper_bound)
+    
+    # Create a copy of the series and replace outliers with NaN
+    filtered = series.copy()
+    filtered[outlier_mask] = np.nan
+    
+    # Interpolate to fill only the new gaps created by the filter
+    interpolated = filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+    # Re-apply the original NaNs to ensure the tail remains empty
+    interpolated[original_nans] = np.nan
+    
+    return interpolated
 
 
+def rolling_iqr_filter(df, window=21, k=2):
+    if isinstance(df, pd.Series):
+        return process_series_iqr(df, window=window, k=k)
+    elif isinstance(df, pd.DataFrame):
+        return df.apply(process_series_iqr, window=window, k=k)
+    else:
+        raise TypeError("Input must be a pandas Series or DataFrame")
 
+########################################################################################################################
 
 
 

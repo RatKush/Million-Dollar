@@ -216,7 +216,7 @@ def plot_single_structure(series, str_name):
     fig = go.Figure()
     series = pd.to_numeric(series, errors='coerce')
     series= rolling_bounds_filter(series, window=21, k=2)
-    print(series.max)
+    #print(series.max)
     #series= remove_outliers(series, 0.01, 0.99)
     #print(series)
     #print(series.loc["2024-01-17"])
@@ -306,13 +306,13 @@ def plot_single_structure(series, str_name):
         #xaxis_title="Date",
         #yaxis_title="Structure Value",
         height=450,
-        margin=dict(l=10, r=10, t=15, b=5),
+        margin=dict(l=10, r=10, t=15, b=8),
         hovermode='x',
         xaxis=dict(showgrid=True, tickformat="%d-%m-%y"),
         #config={'displayModeBar': False}
     )
-    fig.update_yaxes(fixedrange=True)
-    fig.update_xaxes(fixedrange=True)
+    #fig.update_yaxes(fixedrange=True)
+    #fig.update_xaxes(fixedrange=True)
     return fig
 
 
@@ -348,10 +348,11 @@ def cal_sum_of_eases_hikes(out_df, comdty, lookback_prd):
 def cal_sum_of_same_sign_meets(out_df, comdty, lookback_prd):
     Out_df, comdty = process_help_calculation(comdty, out_df, "Out", lookback_prd, 15)
     sum_of_eases_hikes_series = compute_conditional_sum(Out_df,15)
-    # print("len1", len(sum_of_eases_hikes_series))
+    
     # print("lb", lookback_prd)
-    sum_of_eases_hikes_series= sum_of_eases_hikes_series.iloc[:lookback_prd]
-    out_df= out_df.iloc[:lookback_prd]
+    lenfinal= min(lookback_prd, len(sum_of_eases_hikes_series), len(out_df))
+    sum_of_eases_hikes_series= sum_of_eases_hikes_series.iloc[:lenfinal]
+    out_df= out_df.iloc[:lenfinal]
     return pd.Series(sum_of_eases_hikes_series, index=out_df.index)
 
 
@@ -402,8 +403,8 @@ def plot_chart_2_2():
         xaxis=dict(showgrid=True, tickformat="%d-%m-%y"),
         #config={'displayModeBar': False}
     )
-    fig.update_yaxes(fixedrange=True)
-    fig.update_xaxes(fixedrange=True)
+    # fig.update_yaxes(fixedrange=True)
+    # fig.update_xaxes(fixedrange=True)
     return fig
 
 

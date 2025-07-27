@@ -288,11 +288,12 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
     #fig.show(config={"scrollZoom": True})
     return fig
 
- # for sub- series
+ # for sub- series #############################################################################
 def plotted(plot_flags,Comdty,str_name,str_number, sub_series, full_series, pc_line, val_line, local_win, local_win_std, cycle_name ):
     """
     Plot KDE distribution and overlays for a specific cycle subset.
     """
+    #print(cycle_name, sub_series)
     if isinstance(sub_series, list):
         sub_series = pd.Series(sub_series)
     if isinstance(full_series, list):

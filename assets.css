@@ -1,0 +1,191 @@
+/*  ************************************************* tABS ******************************************************************/
+
+/* Hover effect on tabs*/
+div.tab:hover,
+div.tab--selected:hover {
+    border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-left:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-right:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-bottom: none !important;
+}
+
+
+
+
+
+/*  ************************************************* kde control panell ******************************************************************/
+
+#kde-flags-shared-wrapper {
+    position: absolute;
+    top: 140px;
+    right: 0.5%;
+    width: 16.666%; /* 2/12 */
+    background-color: #2b2e35;
+    border: 1px solid #3a3f4b;
+    border-radius: 12px;
+    padding: 0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.control-panel-1 {
+    background-color: #2b2e35;       /* Dark background similar to tabs */
+    color: #c0c4cc;                  /* Muted text color */
+    border: 1px solid #3a3f4b;       /* Same border as tab borders */
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;            /* Soft rounded corners */
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    padding: 8px 4px;
+    /*margin-top: 8px;*/
+    margin-bottom: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); /* Soft shadow */
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+}
+
+.control-panel-1 label {
+    color: #c0c4cc;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.control-panel-1 input {
+    background-color:#ffffff;
+    color:  #1f2128;
+    border: 1px solid #5e636e;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 16px;
+}
+
+.control-panel-1 input:focus {
+    outline: none;
+    border-color: #7a7f8a;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.control-panel-1 .form-check-input:True {
+    background-color: #3e8acc;
+    border-color: #3e8acc;
+}
+
+.control-panel-1 .form-check-input:checked + .form-check-label {
+    color: #ffffff;
+}
+
+.hidden-row {
+    display: none;
+}
+
+
+/*##################################################### tab 2 buttons #######################################################*/
+/* Button styling for chart tab toggle buttons */
+
+.tab-button {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 8px;
+    font-weight: 350;
+    transition: background-color 0.3s, color 0.3s;
+    height: 32px;
+    margin-right: 5px;
+    cursor: pointer;
+
+    padding: 4px 16px;
+}
+
+.tab-button:hover {
+    background-color: #1f2128;
+    color: #c0c4cc;
+    border-top: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-right: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid #2b2e35;
+    height: 34px;
+    font-weight: 400;
+}
+
+
+.tab-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border-top: 1px solid #5e636e;
+    border-right: 1px solid #5e636e;
+    border-left: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+
+.tab-button.selected{
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+/*  Hover (applies to both) */
+.tab-button.selected:hover {
+    background-color: #2b2e35;
+    color:  #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2) ;
+  
+}
+
+
+/*################################################### tab7 buttons #########################################################*/
+
+.tab7-button {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 8px !important;  /* override Bootstrap */
+    font-weight: 350;
+    transition: background-color 0.3s, color 0.3s;
+    width: 100%;
+    cursor: pointer;
+    margin: 5px 0 5px 0
+}
+
+.tab7-button:hover {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab7-button.selected,
+.tab7-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    font-weight: 400;
+}
+
+.tab7-button.selected:hover,
+.tab7-button.active:hover {
+    background-color: #1f2128;
+    color: #ffffff;
+}
+
+/********************************************** tab7 side panel button cross********************************/
+/* assets/style.css */
+
+.panel-close-button {
+    color: white;
+    font-size: 1.75rem; /* Makes the 'x' larger and easier to click */
+    font-weight: bold;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease-in-out; /* Smooth transition for hover effect */
+  }
+  
+  .panel-close-button:hover {
+    opacity: 1; /* Makes the button fully opaque on hover */
+  }
+  
+
+
+
+

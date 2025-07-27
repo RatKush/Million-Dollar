@@ -1,9 +1,12 @@
-from str_cal import  rolling_bounds_filter,fill_missing_values,load_data, index, get_ratio
+from str_cal import  rolling_bounds_filter,fill_missing_values,load_data, index, get_ratio, rolling_iqr_filter
 import pandas as pd
 import numpy as np
 import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
 from scipy.stats import percentileofscore
+from dash import dcc, html
+from kde_help import get_rank
+from str_cal import process_series
 
 
  # removed rest unconventional structures
@@ -50,7 +53,7 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names 
         # Loop over each date in the rolling window
         for date in dates:
             row = out_df.loc[date].to_numpy()   # Convert the contract row (on a single date) into a NumPy array
-
+            #print(row[-10:])
             result = np.full(len(contracts), np.nan)  # Start with all NaNs (same length as contract list)
 
             # Slide a rolling window of size `n` across the contract values
@@ -60,11 +63,11 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names 
 
             # Convert result into a Series with contract names as index
             series = pd.Series(result, index=contracts)
-
-            # Apply outlier filter (you can change the logic inside this function)
-            series_filtered = rolling_bounds_filter(series, window=21, k=2)
-
-            # Trim the series to only the front `curve_length` contracts (e.g., first 15 contracts)
+            
+            # Apply outlier filter 
+            #series_filtered =  rolling_bounds_filter(series, window=11, k=2)
+            series_filtered= rolling_iqr_filter(series, window=21, k=2)
+    
             series_trimmed = series_filtered.iloc[:curve_length]
 
             # Build a DataFrame for this date and structure
@@ -172,12 +175,13 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> pd.DataFrame:
                 roll_dn= curr_val- prev_val
 
             # final adjustment            
-            rr = max(-98, min(98, rr)) # which are tending to infinity
-            if rr<0:
-                if rrdiff< 0: #maxima
-                    rr= 99 
-                elif rrdiff> 0: #minima
-                    rr= -99
+            if rr is not None:
+                rr = max(-98, min(98, rr)) # which are tending to infinity
+                if rr<0:
+                    if rrdiff< 0: #maxima
+                        rr= 99 
+                    elif rrdiff> 0: #minima
+                        rr= -99
             risk_reward_dict[(structure, contract)] = rr
             risk_reward_diff_dict[(structure, contract)] = rrdiff
             roll_down_dict[(structure, contract)] = roll_dn
@@ -252,7 +256,7 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> pd.DataFrame:
 # latest_2d = latest_df["Value"].unstack("Structure")
 # percentile_2d = percentile_rank_df["Percentile"].unstack("Structure")
 
-###########################################################################################################
+###################################### heatmap values populating #####################################################################
 
 def generate_heatmap(rounding, layer_df): #initial value populating
     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
@@ -280,17 +284,369 @@ def generate_heatmap(rounding, layer_df): #initial value populating
     )
     fig.update_layout(
         # height=500,
-        xaxis=dict(side='top'), 
+        xaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
+        yaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
+    x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
+    for x_line in x_coordinate_for_line:
+        if x_line < len(x_labels)-1:
+            fig.add_vline(
+                x=x_line,
+                line_width=1,
+                line_dash="solid",
+                line_color="white",
+                # annotation_text="Key Event", # Optional: add a label to the line
+                # annotation_position="top right"
+            )
+
+    y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
+    for y_line in y_coordinate_for_line:
+         if y_line < len(y_labels)-1:
+            fig.add_hline(
+                y= len(y_labels)-y_line,
+                line_width=1,
+                line_dash="solid",
+                line_color="white",
+                # annotation_text="Key Event", # Optional: add a label to the line
+                # annotation_position="top right"
+            )
 
     # 4. annotation text for each cell
     text = [[f"{val:.{rounding}f}" if not np.isnan(val) else "" for val in row] for row in z]
     fig.update_traces(
         text=text,
         texttemplate="%{text}",
-        hovertemplate="Structure: %{x}<br>Contract: %{y}<br>Value: %{z}<extra></extra>"
+        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>"
     )
     return fig
+
+
+################# heatmap coloring  ######################
+def color_heatmap(fig, type, layer_df): #initial value populating
+    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+
+    # 2. Convert MultiIndex Series to 2D DataFrame
+    df_2d = layer_df.unstack(level=0)['Value']
+    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+
+    # 3. Prepare axes labels and data matrix
+    x_labels = df_2d.columns.tolist()              # Structures (x-axis)
+    y_labels = df_2d.index.tolist()[::-1]          # Contracts (y-axis, reversed)
+    new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
+
+    # 4. Update existing heatmap trace (assumes 1 trace only)
+    if fig.data and isinstance(fig.data[0], go.Heatmap):
+        fig.data[0].z = new_z  # this controls coloring
+        fig.data[0].colorscale = 'Viridis'
+        fig.data[0].showscale = False
+        fig.data[0].hoverinfo = 'skip'
+    ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
+    return fig
+
+def create_blank_heatmap(layer_df):
+    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+
+    df_2d = layer_df.unstack(level=0)['Value']
+    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+
+    x_labels = df_2d.columns.tolist()
+    y_labels = df_2d.index.tolist()[::-1]
+    empty_z = np.zeros_like(df_2d.values[::-1])
+    empty_text = [["" for _ in row] for row in empty_z]
+
+    fig = go.Figure(
+        data=go.Heatmap(
+        z=empty_z,
+        x=x_labels,
+        y=y_labels,
+        text=empty_text,
+        #hoverinfo="text",
+        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
+        colorscale="Greys",  # Initial dummy
+        showscale=False
+        )
+    )
+
+    fig.update_layout(
+        # height=500,
+        xaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
+        yaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
+        height=800,
+        margin=dict(l=5, r=5, t=5, b=5),
+    )
+    x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
+    for x_line in x_coordinate_for_line:
+        if x_line < len(x_labels)-1:
+            fig.add_vline(
+                x=x_line,
+                line_width=1,
+                line_dash="solid",
+                line_color="white",
+                # annotation_text="Key Event", # Optional: add a label to the line
+                # annotation_position="top right"
+            )
+
+    y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
+    for y_line in y_coordinate_for_line:
+         if y_line < len(y_labels)-1:
+            fig.add_hline(
+                y= len(y_labels)-y_line,
+                line_width=1,
+                line_dash="solid",
+                line_color="white",
+                # annotation_text="Key Event", # Optional: add a label to the line
+                # annotation_position="top right"
+            )
+    return fig
+
+
+
+
+
+
+
+
+
+
+
+######################################################## hover t3mplate ##########################3
+
+def hovertemplate_heatmap(heatmap, latest_df, risk_reward_df, risk_reward_diff_df, roll_down_df, percentile_df):
+    structure_order = latest_df.index.get_level_values('Structure').unique().tolist()
+    contract_order = latest_df.index.get_level_values('Contract').unique().tolist()
+    x_labels = structure_order
+    y_labels = contract_order[::-1]
+
+    # 2. Convert MultiIndex Series to 2D DataFrame
+    processed_dfs = {}
+    source_data_map = {
+        'Latest': latest_df,
+        'Pct': percentile_df,
+        'R/Rd': risk_reward_diff_df,
+        'R/R': risk_reward_df,
+        'RlDn': roll_down_df,
+    }
+    for name, df_series in source_data_map.items():
+        if isinstance(df_series, pd.DataFrame):
+            # If it's a DataFrame with a 'Value' column, select it first.
+            df_series = df_series['Value']
+        # Unstack the 'Structure' level to become the columns.
+        df_2d = df_series.unstack(level='Structure')
+        df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+        processed_dfs[name] = df_2d
+
+    # hovertext ##
+    hover_text_matrix = []
+    for contract in y_labels:
+        row_texts = []
+        for structure in x_labels:
+            cell_info = []
+            for name, df in processed_dfs.items():
+                value = df.loc[contract, structure]
+                if pd.notna(value):
+                    # Format each factor on a new line
+                    cell_info.append(f"{name}: {value:.1f}")
+
+            # Join all factors with an HTML line break
+            row_texts.append("<br>".join(cell_info))
+        hover_text_matrix.append(row_texts)
+
+      # Reconstruct the Figure object from the dictionary
+    heatmap = go.Figure(heatmap)
+    heatmap.update_traces(
+        selector=dict(type="heatmap"),  # Optional if only one trace
+        customdata= hover_text_matrix,
+        hovertemplate="<b>%{x} | %{y}</b><br>%{customdata}<extra></extra>"
+    )
+    return heatmap
+
+###################################################### side panel #############################
+def get_adjacent_values(str_data_3d,  x_val, y_val): #D3, SFR3
+    latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
+    latest_df = str_data_3d.loc[latest_date]
+    structure_order = latest_df.index.get_level_values('Structure').unique().tolist()
+    contract_order = latest_df.index.get_level_values('Contract').unique().tolist()
+
+    df_series = latest_df['Value']
+    df_2d = df_series.unstack(level='Structure')
+    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+    
+    x_labels = df_2d.columns.tolist()  # S3, l3, L6   
+    y_labels = df_2d.index.tolist() # SFR1,SFR2...
+    
+    try:
+        curr_col = x_labels.index(x_val)
+        curr_row= y_labels.index(y_val)
+        
+    except ValueError:
+        return None, None
+    prev_data, next_data = None, None # we need value in the same column
+    if curr_row > 0:
+        prev_data = df_2d.iloc[curr_row- 1 , curr_col]
+    if curr_row < len(y_labels) - 1:
+        next_data = df_2d.iloc[curr_row+ 1,  curr_col]
+    # print("cc", curr_col, "cr", curr_row)
+    # print("pv", prev_data,"nv", next_data)
+    return prev_data, next_data 
+
+
+
+def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_val):
+    clicked_series = pd.Series(clicked_series.iloc[:, 0].values)
+    #print(type(clicked_series), len(clicked_series))
+    series= process_series(clicked_series, window=11, k=2)
+    # --- Step 1: Create the Sparkline Plot ---
+    sparkline_fig = go.Figure(
+        go.Scatter(
+            x= series.index,
+            y= series,
+            mode='lines',
+            line_shape='spline',
+            line=dict(width=2, color='#0d6efd'),
+            #fill='tozeroy', 
+            fillcolor='rgba(13, 110, 253, 0.2)'
+        )
+    )
+    sparkline_fig.update_layout(
+        template='plotly_white',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=4, b=4),
+        height=60,
+        xaxis=dict(showgrid=False, showticklabels=False),
+        yaxis=dict(showgrid=False, showticklabels=False),
+    )
+
+    #step 2   Mini Bar Chart: Volatility or Daily Delta View
+    barchart_cod_fig = go.Figure(
+        go.Bar(
+            x=series.index,
+            y=series.diff(),
+            marker_color=['#28a745' if x > 0 else '#dc3545' for x in series.diff()],
+            width=0.8,
+        )
+    )
+    
+    barchart_cod_fig.update_layout(
+        template='plotly_white',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=4, b=4),
+        height=60,
+        xaxis=dict(showgrid=False, showticklabels=False),
+        yaxis=dict(showgrid=False, showticklabels=False),
+    )
+
+    #other matrics step3 
+    latest_val= series.iloc[0]
+    rank= get_rank(series, latest_val)
+    min_val= series.min()
+    max_val= series.max() 
+    roll_down= latest_val- prev_val if prev_val is not None else None
+    roll_up= latest_val- next_val if next_val is not None else None
+    risk_reward_diff= (next_val- latest_val) - (latest_val- prev_val) if prev_val is not None and next_val is not None else None
+    risk_reward_ratio = None
+    if roll_up is not None and roll_up != 0:
+        risk_reward_ratio = roll_down / roll_up if roll_down is not None else None
+
+    std_dev= series.std()
+    mean = series.mean()
+    median = series.median() 
+    range_span = max_val - min_val
+    z_score = (latest_val - mean) / std_dev if std_dev != 0 else np.nan
+
+     # --- Step 4: Assemble the Panel's Layout Components ---
+    panel_content = dbc.Container([
+        # Header Row with Title and Close Button
+        dbc.Row([
+            dbc.Col(html.H5(f"{x_val} | {y_val}", className="my-auto"), width='auto'),
+            dbc.Col(
+                html.Span(
+                    "×",  # The 'x' character for the button
+                    id="details-panel-close-btn",
+                    n_clicks=0,
+                    className="panel-close-button",  # Custom class for your separate CSS file
+                    style={'cursor': 'pointer'}      # Changes the mouse cursor to a pointer on hover
+                ),
+            width="auto",
+            )
+        ], align="center", justify="between", className="mb-3"),
+
+        # Main Value Display and Sparkline
+        dbc.Card(dbc.CardBody([
+            html.H6("Current Value", className="card-subtitle mb-2 text-muted"),
+            html.H3(f"{latest_val:.2f}" if latest_val is not None else "N/A", className="card-title"),
+            dcc.Graph(figure=sparkline_fig, config={'displayModeBar': False}, className="mt-2")
+        ])),
+
+        # Daily Change Bar Chart
+        dbc.Card(dbc.CardBody([
+            html.H6("Daily Change", className="card-subtitle mb-2 text-muted"),
+            dcc.Graph(figure=barchart_cod_fig, config={'displayModeBar': False})
+        ]), className="mt-3"),
+        
+        # Key Metrics Grid
+        html.H6("Statistical Analysis", className="mt-4 mb-2"),
+        dbc.Row([
+            dbc.Col(dbc.Card(dbc.CardBody([
+                html.P("Rank", className="text-muted small mb-0"),
+                html.H5(f"{rank:.0f}%" if rank is not None else "N/A")
+            ])), width=6),
+            dbc.Col(dbc.Card(dbc.CardBody([
+                html.P("Z-Score", className="text-muted small mb-0"),
+                html.H5(f"{z_score:.2f}" if z_score is not None else "N/A")
+            ])), width=6),
+        ], className="g-2"),
+
+        dbc.Row([
+            dbc.Col(dbc.Card(dbc.CardBody([
+            html.P("Min", className="text-muted small mb-0"),
+            html.H5(f"{min_val:.1f}" if min_val is not None else "N/A")
+        ])), width=6),
+            dbc.Col(dbc.Card(dbc.CardBody([
+                html.P("Max", className="text-muted small mb-0"),
+                html.H5(f'{max_val:.1f}' if max_val is not None else "N/A")
+            ])), width=6),
+        ], className="g-2 mt-2"),
+
+        dbc.Row([
+             dbc.Col(dbc.Card(dbc.CardBody([
+                html.P("Roll Dn", className="text-muted small mb-0"),
+                html.H5(f"{roll_down:.1f}" if roll_down is not None else "N/A")
+            ])), width=6),
+            
+            dbc.Col(dbc.Card(dbc.CardBody([
+                html.P("Roll Up", className="text-muted small mb-0"),
+                html.H5(f"{roll_up:.1f}" if roll_up is not None else "N/A")
+            ])), width=6),
+        ], className="g-2 mt-2"),
+
+     
+
+        # Roll and Risk/Reward Analysis
+        html.H6("Roll & Risk Analysis", className="mt-4 mb-2"), 
+        dbc.ListGroup([
+            # dbc.ListGroupItem([html.Span("Roll Down", className="fw"), html.Span(f"{roll_down:.1f}" if roll_down is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Std Dev", className="fw"), html.Span(f"{std_dev:.1f}" if std_dev is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Median", className="fw"), html.Span(f"{median:.1f}" if median is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Mean", className="fw"), html.Span(f"{mean:.1f}" if mean is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Risk/Reward Diff", className="fw"), html.Span(f"{risk_reward_diff:.1f}" if risk_reward_diff is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Risk/Reward Ratio", className="fw"), html.Span(f"{risk_reward_ratio:.1f}" if risk_reward_ratio is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Range Span", className="fw"), html.Span(f"{range_span:.1f}" if range_span is not None else "N/A", className="float-end")]),
+            # dbc.ListGroupItem([html.Span("Max Value", className="fw"), html.Span(f"{max_val:.2f}" if max_val is not None else "N/A", className="float-end")]),
+            # dbc.ListGroupItem([html.Span("Min Value", className="fw"), html.Span(f"{min_val:.2f}" if min_val is not None else "N/A", className="float-end")]),
+            
+        ], flush=True),
+
+    ], fluid=True, style={'padding': '1rem'})
+    
+    return panel_content
+
+
+
+    
 
