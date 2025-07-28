@@ -16,7 +16,7 @@ from str_cal import process_structure, extract_comdty,process_help_calculation, 
 from curve_plotter import plot_single_structure, get_button_class, compute_correlation_parameters
 from curve_plotter import generate_curve_plot, cal_sum_of_eases_hikes,cal_sum_of_same_sign_meets, Out_tab2_2 ,S12_tab2_2,L6_tab2_2, add_chart_2_2, plot_chart_2_2,add_chart_2_3, plot_chart_2_3, build_button
 from kde_help import plot_main_kde, classify_cycle, plotted
-from matrix import build_button_tab7, get_button_class_tab7, generate_heatmap, color_heatmap, create_blank_heatmap, compute_3d_structure, compute_percentile_df, compute_risk_reward_roll_df, hovertemplate_heatmap, generate_heatmap_detail_panel, get_adjacent_values
+from matrix import build_button_tab7, get_button_class_tab7, generate_heatmap, color_heatmap, create_blank_heatmap, compute_3d_structure, compute_percentile_df, compute_risk_reward_roll_df, hovertemplate_heatmap, generate_heatmap_detail_panel, get_adjacent_values, filter_grey
 from footer import footer_component, send_feedback_email
 
 # ------------------------------------------------
@@ -210,11 +210,9 @@ default_2_2_2_3 = {
 }
 
 ############################################# tab7  buttons ##############################
-matrix_buttons=[
+matrix_buttons_price=[
     "btn-price",
     "btn-percentile",
-    "btn-rank5_95",
-    "btn-rank1090",
     "btn-riskrewarddiff",
     "btn-riskreward",
     "btn-rolldown",
@@ -222,10 +220,11 @@ matrix_buttons=[
     "btn-rangebound",
     "btn-oi",
     "btn-volume",
-
-     "btn-price_2",
+]
+matrix_buttons_color= [
+    "btn-price_2",
     "btn-percentile_2",
-    "btn-rank5_95_2",
+    "btn-rank595_2",
     "btn-rank1090_2",
     "btn-riskrewarddiff_2",
     "btn-riskreward_2",
@@ -238,8 +237,6 @@ matrix_buttons=[
 default_tab7 = {
     "btn-price": True,
     "btn-percentile": False,
-    "btn-rank5_95": False,
-    "btn-rank1090": False,
     "btn-riskrewarddiff": False,
     "btn-riskreward": False,
     "btn-rolldown": False,
@@ -250,7 +247,7 @@ default_tab7 = {
 
     "btn-price_2": False,
     "btn-percentile_2": True,
-    "btn-rank5_95_2": False,
+    "btn-rank595_2": False,
     "btn-rank1090_2": False,
     "btn-riskrewarddiff_2": False,
     "btn-riskreward_2": False,
@@ -535,7 +532,8 @@ app.layout = dbc.Container([
 
                     html.Div([
                         # Section title
-                        dcc.Store(id='tab7-buttons-store', data=default_tab7),
+                        dcc.Store(id='tab7-buttons-store-price', data=default_tab7),
+                        dcc.Store(id='tab7-buttons-store-color', data=default_tab7),
                         dbc.Row([
                             # --- Left Column (50% width) ---
                             dbc.Col([
@@ -553,8 +551,6 @@ app.layout = dbc.Container([
                                 dbc.ButtonGroup([
                                     build_button_tab7("Price", id="btn-price", active=default_tab7["btn-price"]),
                                     build_button_tab7("Percentile", id="btn-percentile", active=default_tab7["btn-percentile"]),
-                                    build_button_tab7("≤ 5 or ≥ 95", id="btn-rank5_95", active=default_tab7["btn-rank5_95"]),
-                                    build_button_tab7("≤ 10 or ≥ 90", id="btn-rank1090", active=default_tab7["btn-rank1090"]),
                                     build_button_tab7("RRd diff", id="btn-riskrewarddiff", active=default_tab7["btn-riskrewarddiff"]),
                                     build_button_tab7("Risk/ Reward", id="btn-riskreward", active=default_tab7["btn-riskreward"]),
                                     build_button_tab7("Roll down", id="btn-rolldown", active=default_tab7["btn-rolldown"]),
@@ -582,7 +578,7 @@ app.layout = dbc.Container([
                                 dbc.ButtonGroup([
                                     build_button_tab7("Price", id="btn-price_2", active=default_tab7["btn-price_2"]),
                                     build_button_tab7("Percentile", id="btn-percentile_2", active=default_tab7["btn-percentile_2"]),
-                                    build_button_tab7("≤ 5 or ≥ 95", id="btn-rank5_95_2", active=default_tab7["btn-rank5_95_2"]),
+                                    build_button_tab7("≤ 5 or ≥ 95", id="btn-rank595_2", active=default_tab7["btn-rank595_2"]),
                                     build_button_tab7("≤ 10 or ≥ 90", id="btn-rank1090_2", active=default_tab7["btn-rank1090_2"]),
                                     build_button_tab7("RRd diff", id="btn-riskrewarddiff_2", active=default_tab7["btn-riskrewarddiff_2"]),
                                     build_button_tab7("Risk/ Reward", id="btn-riskreward_2", active=default_tab7["btn-riskreward_2"]),
@@ -1575,27 +1571,56 @@ def cached_compute_3d_df(out_df_json: dict, local_win: int, curve_len: int):
 
 
 @app.callback(
-    Output("tab7-buttons-store", "data"),
-    [Input(btn_id, "n_clicks") for btn_id in matrix_buttons],
-    State("tab7-buttons-store", "data"),
+    Output("tab7-buttons-store-price", "data"),
+    [Input(btn_id, "n_clicks") for btn_id in matrix_buttons_price],
+    State("tab7-buttons-store-price", "data"),
     prevent_initial_call=True
 )
 def toggle_buttons(*args):
     store = args[-1] or {}
     triggered_id = ctx.triggered_id
+    if not triggered_id:
+        return dash.no_update
+    if triggered_id:
+        current = store.get(triggered_id, False)
+        # Create a new state dictionary, starting with all buttons as inactive
+        new_store = {btn_id: False for btn_id in matrix_buttons_price}
+        # If the button was not already active, set it to active.
+        # If it was active, it will now be deselected (as per the new_store initialization).
+        if not current:
+            new_store[triggered_id] = True 
+    return new_store
+
+
+@app.callback(
+    Output("tab7-buttons-store-color", "data"),
+    [Input(btn_id, "n_clicks") for btn_id in matrix_buttons_color],
+    State("tab7-buttons-store-color", "data"),
+    prevent_initial_call=True
+)
+def toggle_buttons(*args):
+    store = args[-1] or {}
+    triggered_id = ctx.triggered_id
+    if not triggered_id:
+        return dash.no_update
     if triggered_id:
         current = store.get(triggered_id, False)
         store[triggered_id] = not current
     return store
 
-
 @app.callback(
-    [Output(btn_id, "className") for btn_id in matrix_buttons],
-    Input("tab7-buttons-store", "data")
+    [Output(btn_id, "className") for btn_id in matrix_buttons_price],
+    Input("tab7-buttons-store-price", "data")
 )
 def update_classnames(store):
-    return [get_button_class_tab7(store.get(btn_id, False)) for btn_id in matrix_buttons]
+    return [get_button_class_tab7(store.get(btn_id, False)) for btn_id in matrix_buttons_price]
 
+@app.callback(
+    [Output(btn_id, "className") for btn_id in matrix_buttons_color],
+    Input("tab7-buttons-store-color", "data")
+)
+def update_classnames(store):
+    return [get_button_class_tab7(store.get(btn_id, False)) for btn_id in matrix_buttons_color]
 @callback(
     Output("fullscreen-mode", "data"),
     Output("plot-col-wid", "width"),
@@ -1620,13 +1645,14 @@ def toggle_fullscreen(n_clicks, is_fullscreen):
     Input('stored-data', 'data'),
     Input('input-local-window', 'value'),
     Input('input-curve-length', 'value'),
-    Input('tab7-buttons-store', 'data'),
+    Input('tab7-buttons-store-price', 'data'),
+    Input('tab7-buttons-store-color', 'data'),
     Input('tabs', 'value'),
     prevent_initial_call=True
 )
-def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store, tab):
+def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store_price, toggle_store_color, tab):
     if not stored:
-        return warning_plot("⚠ data not available (no stored data)")
+        return warning_plot("⚠ data not available (no stored data)"), time.time()
 
     # 2. Load and Prepare Core Data
     # out_df = pd.DataFrame(
@@ -1635,7 +1661,10 @@ def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store, tab):
     #     columns=stored["out_df"]["columns"]
     # )
     #str_data_3d = compute_3d_structure(out_df, local_win=local_win, curve_length=curve_len)
-    out_df_json = stored["out_df"]
+    
+    out_df_json = stored.get("out_df")
+    if out_df_json is None:
+        raise PreventUpdate  # or handle gracefully
     str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
 
     latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
@@ -1647,41 +1676,47 @@ def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store, tab):
     values_btn_fig_map = {
         "btn-price": lambda: generate_heatmap(1, latest_df),
         "btn-percentile": lambda: generate_heatmap(0, percentile_df),
-        "btn-rank5_95": lambda: generate_heatmap(0, percentile_df), # Assuming these use the same data
-        "btn-rank1090": lambda: generate_heatmap(0, percentile_df),
         "btn-riskrewarddiff": lambda: generate_heatmap(1, risk_reward_diff_df),
         "btn-riskreward": lambda: generate_heatmap(1, risk_reward_df),
         "btn-rolldown": lambda: generate_heatmap(1, roll_down_df),
     }
 
-    filter_btn_fig_map = {
+    heatmap = None
+    for btn_id, generate_func in values_btn_fig_map.items():
+        if toggle_store_price.get(btn_id, False):
+            # As soon as the active button is found, generate and return its heatmap.
+            heatmap= generate_func() 
+            break
+            
+    colors_btn_fig_map = {
         "btn-price_2": lambda: color_heatmap(heatmap, 1, latest_df),
         "btn-percentile_2": lambda: color_heatmap(heatmap, 0, percentile_df),
-        "btn-rank5_95_2": lambda: color_heatmap(heatmap, 0, percentile_df), # Assuming these use the same data
-        "btn-rank1090_2": lambda: color_heatmap(heatmap, 0, percentile_df),
         "btn-riskrewarddiff_2": lambda: color_heatmap( heatmap, 1, risk_reward_diff_df),
         "btn-riskreward_2": lambda: color_heatmap(heatmap, 1, risk_reward_df),
         "btn-rolldown_2": lambda: color_heatmap(heatmap, 1, roll_down_df),
     }
-    heatmap = None
-    # Iterate through the map to find the first active button and return its figure.
-    for btn_id, generate_func in values_btn_fig_map.items():
-        if toggle_store.get(btn_id, False):
-            # As soon as the active button is found, generate and return its heatmap.
-            heatmap= generate_func() 
-            break
-            #return heatmap , time.time()
+    filter_btn_fig_map = {
+        "btn-rank595_2": lambda: filter_grey(heatmap, 595, percentile_df), # Assuming these use the same data
+        "btn-rank1090_2": lambda: filter_grey(heatmap, 1090, percentile_df),
+        # "btn-riskrewarddiff_2": lambda: color_heatmap( heatmap, 1, risk_reward_diff_df),
+        # "btn-riskreward_2": lambda: color_heatmap(heatmap, 1, risk_reward_df),
+        # "btn-rolldown_2": lambda: color_heatmap(heatmap, 1, roll_down_df),
+    }
+   
     
     #If no value selected, create fallback base heatmap (with empty values)
     if heatmap is None:
         fallback_df = latest_df  # or any other safe default
         heatmap = create_blank_heatmap(fallback_df)
 
-    for btn_id, color_fn in filter_btn_fig_map.items():
-        if toggle_store.get(btn_id, False):
-            # As soon as the active button is found, generate and return its heatmap.
+    for btn_id, color_fn in colors_btn_fig_map.items():
+        if toggle_store_color.get(btn_id, False):
             return color_fn() , time.time()
     
+    for btn_id, grey_fn in filter_btn_fig_map.items():
+        if toggle_store_color.get(btn_id, False):
+            return grey_fn() , time.time()
+
 
     # If no button is active, return a warning message.
     return heatmap, time.time() 
@@ -1706,7 +1741,9 @@ def update_heatmap_hoverinfo(n_intervals, existing_figure, stored, local_win, cu
         return dash.no_update
     #print("uranium enrichment loading ...." )
     # 2. Re-calculate Data Needed for Hover # For optimization, this data could also be passed via a dcc.Store.
-    out_df_json = stored["out_df"]
+    out_df_json = stored.get("out_df")
+    if out_df_json is None:
+        raise PreventUpdate  # or handle gracefully
     str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
 
     latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
@@ -1739,7 +1776,10 @@ def display_cell_details(click_data, stored, local_win, curve_len):
     point = click_data['points'][0]
     x_val, y_val = point['x'], point['y']
     
-    out_df_json = stored["out_df"]
+    
+    out_df_json = stored.get("out_df")
+    if out_df_json is None:
+        raise PreventUpdate  # or handle gracefully
     str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
 
     clicked_series= str_data_3d.loc[(slice(None), x_val, y_val)]

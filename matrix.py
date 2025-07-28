@@ -284,8 +284,9 @@ def generate_heatmap(rounding, layer_df): #initial value populating
     )
     fig.update_layout(
         # height=500,
-        xaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
-        yaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
+        plot_bgcolor='lightgray',  # inside axes
+        xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
+        yaxis=dict(side='top',showgrid= False, tickfont=dict(size=14, family="Orbitron", color="black")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
@@ -323,7 +324,7 @@ def generate_heatmap(rounding, layer_df): #initial value populating
     return fig
 
 
-################# heatmap coloring  ######################
+################# heatmap coloring  ##############################################################
 def color_heatmap(fig, type, layer_df): #initial value populating
     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
     contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
@@ -331,10 +332,6 @@ def color_heatmap(fig, type, layer_df): #initial value populating
     # 2. Convert MultiIndex Series to 2D DataFrame
     df_2d = layer_df.unstack(level=0)['Value']
     df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-
-    # 3. Prepare axes labels and data matrix
-    x_labels = df_2d.columns.tolist()              # Structures (x-axis)
-    y_labels = df_2d.index.tolist()[::-1]          # Contracts (y-axis, reversed)
     new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
 
     # 4. Update existing heatmap trace (assumes 1 trace only)
@@ -350,20 +347,15 @@ def create_blank_heatmap(layer_df):
     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
     contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
 
-    df_2d = layer_df.unstack(level=0)['Value']
-    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-
-    x_labels = df_2d.columns.tolist()
-    y_labels = df_2d.index.tolist()[::-1]
-    empty_z = np.zeros_like(df_2d.values[::-1])
-    empty_text = [["" for _ in row] for row in empty_z]
+    empty_z =  z_empty = np.zeros((len(contract_order ), len(structure_order)))
+    text_empty = [["" for _ in structure_order] for _ in contract_order ]
 
     fig = go.Figure(
         data=go.Heatmap(
-        z=empty_z,
-        x=x_labels,
-        y=y_labels,
-        text=empty_text,
+        z= empty_z,
+        x= structure_order,
+        y= contract_order,
+        text= text_empty,
         #hoverinfo="text",
         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
         colorscale="Greys",  # Initial dummy
@@ -373,14 +365,15 @@ def create_blank_heatmap(layer_df):
 
     fig.update_layout(
         # height=500,
-        xaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
-        yaxis=dict(side='top', tickfont=dict(size=14, family="Orbitron", color="black")),
+        plot_bgcolor='lightgray',
+        xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
+        yaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
     x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
     for x_line in x_coordinate_for_line:
-        if x_line < len(x_labels)-1:
+        if x_line < len(structure_order)-1:
             fig.add_vline(
                 x=x_line,
                 line_width=1,
@@ -392,9 +385,9 @@ def create_blank_heatmap(layer_df):
 
     y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
     for y_line in y_coordinate_for_line:
-         if y_line < len(y_labels)-1:
+         if y_line < len(contract_order)-1:
             fig.add_hline(
-                y= len(y_labels)-y_line,
+                y= len(contract_order)-y_line,
                 line_width=1,
                 line_dash="solid",
                 line_color="white",
@@ -404,7 +397,38 @@ def create_blank_heatmap(layer_df):
     return fig
 
 
+########################## highlighter filter ####################
 
+def filter_grey (fig, type, layer_df): #initial value populating
+    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+
+    # 2. Convert MultiIndex Series to 2D DataFrame
+    df_2d = layer_df.unstack(level=0)['Value']
+    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+    new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
+
+     # Create mask for the condition
+    """" Set grey values for cells not meeting condition
+    Using None for values that don't meet the condition will make them transparent,
+    allowing a background color or another trace to show through if desired.
+    If a specific grey color is needed, you would assign a numerical value and
+    define that value in your colorscale to map to grey """
+
+    if(type== 595):
+        mask = (new_z >= 95) | (new_z <= 5)
+    elif(type== 1090):
+        mask = (new_z >= 90) | (new_z <= 10)
+
+    colored_z = np.where(mask, new_z, None)
+    # 4. Update existing heatmap trace (assumes 1 trace only)
+    if fig.data and isinstance(fig.data[0], go.Heatmap):
+        fig.data[0].z = colored_z  # this controls coloring
+        #fig.data[0].colorscale = 'Viridis'
+        fig.data[0].showscale = False
+        fig.data[0].hoverinfo = 'skip'
+    ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
+    return fig
 
 
 
@@ -570,7 +594,7 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
                     id="details-panel-close-btn",
                     n_clicks=0,
                     className="panel-close-button",  # Custom class for your separate CSS file
-                    style={'cursor': 'pointer'}      # Changes the mouse cursor to a pointer on hover
+                    style={'cursor': 'pointer', 'fontSize': '36px', 'font-weight': 'bold', 'lineHeight': '1'}      # Changes the mouse cursor to a pointer on hover
                 ),
             width="auto",
             )
