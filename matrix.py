@@ -257,6 +257,24 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> pd.DataFrame:
 # percentile_2d = percentile_rank_df["Percentile"].unstack("Structure")
 
 ###################################### heatmap values populating #####################################################################
+custom_colorscale = [
+    [0.0,  'rgb(150, 190, 255)'],  # Strong Light Blue for 0%
+    [0.05, 'rgb(170, 205, 255)'],  # Distinctly lighter for 5%
+    [0.10, 'rgb(190, 220, 255)'],  # Clearly lighter for 10%
+    [0.20, 'rgb(215, 235, 255)'],  # Very light blue for 20%
+
+    # --- Middle Section (Low-distinction area) ---
+    # The color changes very little here, as requested.
+    [0.5,  'rgb(240, 245, 240)'],  # A neutral, pale green-white for the midpoint
+
+    # --- Green Extreme (High-distinction area) ---
+    [0.80, 'rgb(215, 245, 215)'],  # Very light green for 80%
+    [0.90, 'rgb(190, 235, 190)'],  # Clearly darker for 90%
+    [0.95, 'rgb(170, 225, 170)'],  # Distinctly darker for 95%
+    [1.0,  'rgb(150, 215, 150)']   # Strong Light Green for 100%
+]
+
+
 
 def generate_heatmap(rounding, layer_df): #initial value populating
     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
@@ -277,7 +295,7 @@ def generate_heatmap(rounding, layer_df): #initial value populating
             z=z,
             x=x_labels,
             y=y_labels,
-            colorscale='Viridis',
+            colorscale = custom_colorscale,
             showscale=False     # Hides the side color panel
             
         )
@@ -319,7 +337,11 @@ def generate_heatmap(rounding, layer_df): #initial value populating
     fig.update_traces(
         text=text,
         texttemplate="%{text}",
-        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>"
+        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
+        # textfont=dict(
+        #    # size=18,  # Set the font size
+        #     family="Orbitron"
+        #  )
     )
     return fig
 
@@ -337,7 +359,7 @@ def color_heatmap(fig, type, layer_df): #initial value populating
     # 4. Update existing heatmap trace (assumes 1 trace only)
     if fig.data and isinstance(fig.data[0], go.Heatmap):
         fig.data[0].z = new_z  # this controls coloring
-        fig.data[0].colorscale = 'Viridis'
+        fig.data[0].colorscale = custom_colorscale
         fig.data[0].showscale = False
         fig.data[0].hoverinfo = 'skip'
     ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
@@ -358,7 +380,7 @@ def create_blank_heatmap(layer_df):
         text= text_empty,
         #hoverinfo="text",
         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
-        colorscale="Greys",  # Initial dummy
+        colorscale="lightgray",  # Initial dummy
         showscale=False
         )
     )
@@ -409,11 +431,11 @@ def filter_grey (fig, type, layer_df): #initial value populating
     new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
 
      # Create mask for the condition
-    """" Set grey values for cells not meeting condition
+    """" Set gray values for cells not meeting condition
     Using None for values that don't meet the condition will make them transparent,
     allowing a background color or another trace to show through if desired.
-    If a specific grey color is needed, you would assign a numerical value and
-    define that value in your colorscale to map to grey """
+    If a specific gray color is needed, you would assign a numerical value and
+    define that value in your colorscale to map to gray """
 
     if(type== 595):
         mask = (new_z >= 95) | (new_z <= 5)
@@ -424,7 +446,6 @@ def filter_grey (fig, type, layer_df): #initial value populating
     # 4. Update existing heatmap trace (assumes 1 trace only)
     if fig.data and isinstance(fig.data[0], go.Heatmap):
         fig.data[0].z = colored_z  # this controls coloring
-        #fig.data[0].colorscale = 'Viridis'
         fig.data[0].showscale = False
         fig.data[0].hoverinfo = 'skip'
     ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
