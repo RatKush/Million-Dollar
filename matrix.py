@@ -353,24 +353,52 @@ def generate_heatmap(rounding, layer_df): #initial value populating
         if x_line < len(x_labels)-1:
             fig.add_vline(
                 x=x_line,
-                line_width=1,
+                line_width=1.5,
                 line_dash="solid",
                 line_color="white",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
 
+
+   
+
     y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
     for y_line in y_coordinate_for_line:
-         if y_line < len(y_labels)-1:
+        if y_line < len(y_labels)-1:
             fig.add_hline(
                 y= len(y_labels)-y_line,
-                line_width=1,
+                line_width=1.5,
                 line_dash="solid",
                 line_color="white",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
+    
+    vline_segments = [
+        (-0.5, 3.5, 'grey'),
+        (3.5, 7.5, 'red'),
+        (7.5, 11.5, 'green'),
+        (11.5, 15.5, 'blue'),
+        (15.5, 19.5, 'gold'),
+        (19.5, 23.5, 'purple'),
+        (23.5, 27.5, 'orange'),
+        (27.5, 31.5, 'pink'),
+    ]
+    # Add each segment as a separate shape at x = 0
+    y_max = len(y_labels) - 1
+    for y0, y1, color in vline_segments:
+        yf = min(y1, y_max + 0.5)  # allow up to the midpoint after last y-label
+        if y0 > y_max + 0.5:
+            break
+        fig.add_shape(
+            type='line',
+            x0= -0.5, x1= -0.5,
+            y0= y_max - y0,
+            y1= y_max - yf,
+            line=dict(color=color, width=2.5),
+            layer='above'
+        )
 
     # 4. annotation text for each cell
     text = [[f"{val:.{rounding}f}" if not np.isnan(val) else "" for val in row] for row in z]
