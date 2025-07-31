@@ -1,6 +1,7 @@
 # A Dash app to explore structure curve data: Curve view, chart and KDE analysis
 
 import os
+import socket
 import pandas as pd
 import dash
 from dash import dcc, html, Input, Output, State, ctx, callback, no_update
@@ -1935,6 +1936,19 @@ def warning_plot(warning):
 # ------------------------------------------------
 # MAIN
 # ------------------------------------------------
+def find_available_port(start=8050, max_tries=50):
+    for port in range(start, start + max_tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("No available ports found")
+
+port = find_available_port()
+
 if __name__ == '__main__':
-    app.run(debug= False, host='0.0.0.0', port=8050)# for live
+    #app.run(debug= False, host='0.0.0.0', port=8050)# for live
+    app.run(debug=False, port=port) #downlodable
     #app.run(debug= True)
