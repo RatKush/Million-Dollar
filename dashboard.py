@@ -506,19 +506,19 @@ app.layout = dbc.Container([
                         html.Div([
                         #multi drop down 
                             html.Div([
-                                html.Label("ratio", className="form-label", style={"width": "20%", "marginBottom": 0}),
-                                html.Div([
-                                    dcc.Dropdown(
-                                        id='dropdown-ratio',
-                                        options=[{'label': s, 'value': s} for s in index],
-                                        value=index[0:27],
-                                        multi=True,
-                                        #hide_selected=False,
-                                        clearable=False,
-                                    )
-                                ], style={"width": "80%"}) # The wrapper Div controls the width and alignment
-
-                            ], id='dropdown-wrapper', className="d-flex justify-content-between mb-2"),     
+                                html.Label("ratio", className="form-label", style={
+                                    "marginBottom": "4px"  # optional: reduce space between label and box
+                                }),
+                                dcc.Dropdown(
+                                    id='dropdown-ratio',
+                                    options=[{'label': s, 'value': s} for s in index],
+                                    value=index[0:27],
+                                    multi=True,
+                                    clearable=False,
+                                    style={"width": "100%","maxHeight": "120px", "overflowY": "auto", "fontSize": "10px", "background-color": "#2b2e35", "color": "#ffffff"}  
+                                )
+                            ], id='dropdown-wrapper', className="mb-2", style={"width": "100%"})
+,     
 
                             html.Div([
                                 html.Label("Local Window", className="form-label", style={"width": "68%", "marginBottom": 0}),
