@@ -26,11 +26,62 @@ def build_button_tab7(label, id, active=False):
     )
 
 ####################### df computation ###############################################
-structure_names= index[0:27]
-def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names , local_win=21, curve_length=15) -> pd.DataFrame:
+#structure_names= {"D12"}
+structure_names= index
+
+def handle_outliers(series: pd.Series, window_size: int, threshold: float, method: str = 'replace') -> pd.Series:
+    if not isinstance(series, pd.Series):
+        raise TypeError("Input 'series' must be a pandas.Series.")
+        
+    # --- Step 1: Calculate rolling statistics for the PRECEDING window ---
+    
+    # Rolling median of the window *before* each point
+    # We use shift(1) to ensure each point is compared against the stats of the window that came before it.
+    rolling_median = series.rolling(window=window_size, min_periods=3, center=False).median().shift(1)
+
+    # Rolling MAD (Median Absolute Deviation)
+    def mad(window):
+        median = np.median(window)
+        return np.median(np.abs(window - median))
+
+    # .apply() is used here as pandas has no built-in rolling mad
+    rolling_mad = series.rolling(window=window_size, min_periods=1, center=False).apply(mad, raw=True).shift(1)
+    
+    # --- Step 2: Calculate the modified Z-score for each point ---
+    
+    # The constant 1.4826 scales MAD to be comparable to standard deviation
+    # We handle cases where rolling_mad is 0 to avoid division by zero errors
+    with np.errstate(divide='ignore', invalid='ignore'):
+        score = np.abs(series - rolling_median) / (1.4826 * rolling_mad)
+    
+    # If rolling_mad was 0, the score is NaN/inf. We can treat these as non-outliers (score=0)
+    # as a zero-deviation window means the point should be identical to the median.
+    score.fillna(0, inplace=True)
+    
+    # --- Step 3: Identify outliers based on the score and threshold ---
+    is_outlier = score > threshold
+    
+    # --- Step 4: Handle the outliers based on the chosen method ---
+    if method == 'replace':
+        series_cleaned = series.copy()
+        # Replace outliers with the median of the preceding window
+        series_cleaned[is_outlier] = rolling_median[is_outlier]
+        return series_cleaned
+        
+    elif method == 'identify':
+        return is_outlier
+        
+    elif method == 'remove':
+        return series[~is_outlier]
+        
+    else:
+        raise ValueError("Method must be one of 'replace', 'identify', or 'remove'.")
+
+
+
+def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names , local_win=21, curve_length=15 ) -> pd.DataFrame:
     """
     Efficiently compute a MultiIndex DataFrame with shape (Date, Structure, Contract).
-    
     - Z axis: Dates (depth)
     - X axis: Structure names
     - Y axis: Contracts
@@ -38,38 +89,29 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names 
     
     Returns a long-form pandas DataFrame with a MultiIndex.
     """
-
     all_frames = []  # Temporary list to store DataFrames for each structure
     dates = out_df.index[:local_win]  # Only use local window of most recent dates
     contracts = out_df.columns         # All contract labels, e.g., ['EDU5', 'EDZ5', ...]
-
+    
     # Loop over each structure (e.g., L3, L6, L12...)
     for struct in structure_names:
         weights = np.array(get_ratio(struct))  # Convert the structure ratio into a NumPy array
         n = len(weights)                       # Length of the structure (e.g., 3 for butterfly)
-
         struct_data = []  # To store daily results for this structure
-
-        # Loop over each date in the rolling window
-        for date in dates:
-            row = out_df.loc[date].to_numpy()   # Convert the contract row (on a single date) into a NumPy array
-            #print(row[-10:])
-            result = np.full(len(contracts), np.nan)  # Start with all NaNs (same length as contract list)
-
-            # Slide a rolling window of size `n` across the contract values
-            for i in range(len(contracts) - n + 1):
+        for date in dates:  # Loop over each date in the rolling window
+            row = out_df.loc[date]
+            row = handle_outliers(series=row, window_size=10, threshold=3.0, method='replace')
+            row= row.to_numpy() # Convert the contract row (on a single date) into a NumPy array
+            result = np.full(len(contracts), np.nan)  # Start with all NaNs (same length as contract list
+            for i in range(len(contracts) - n + 1):  # Slide a rolling window of size `n` across the contract values
                 # Compute dot product between weights and contract window values
                 result[i] = np.dot(row[i:i + n], weights) * 100  # Multiply by 100 as per your logic
-
-            # Convert result into a Series with contract names as index
-            series = pd.Series(result, index=contracts)
-            
-            # Apply outlier filter 
-            #series_filtered =  rolling_bounds_filter(series, window=11, k=2)
-            series_filtered= rolling_iqr_filter(series, window=21, k=2)
-    
+            series = pd.Series(result, index=contracts) # Convert result into a Series with contract names as index
+            #series_filtered= rolling_iqr_filter(series, window=21, k=2)
+            #print( date, struct, series)
+            series_filtered = handle_outliers(series=series, window_size=10, threshold=3.0, method='replace')
+            # 
             series_trimmed = series_filtered.iloc[:curve_length]
-
             # Build a DataFrame for this date and structure
             temp_df = pd.DataFrame({
                 "Date": date,                             # constant
@@ -79,10 +121,8 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names 
             })
 
             struct_data.append(temp_df)  # Append this day's result to list
-
         # Concatenate all dates for one structure into a single DataFrame
         all_frames.append(pd.concat(struct_data))
-
     # Concatenate all structures into final long-form DataFrame
     final_df = pd.concat(all_frames)
     # Set MultiIndex (Date, Structure, Contract) and return
@@ -346,25 +386,6 @@ def generate_heatmap(rounding, layer_df): #initial value populating
     return fig
 
 
-################# heatmap coloring  ##############################################################
-def color_heatmap(fig, type, layer_df): #initial value populating
-    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
-    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
-
-    # 2. Convert MultiIndex Series to 2D DataFrame
-    df_2d = layer_df.unstack(level=0)['Value']
-    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-    new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
-
-    # 4. Update existing heatmap trace (assumes 1 trace only)
-    if fig.data and isinstance(fig.data[0], go.Heatmap):
-        fig.data[0].z = new_z  # this controls coloring
-        fig.data[0].colorscale = custom_colorscale
-        fig.data[0].showscale = False
-        fig.data[0].hoverinfo = 'skip'
-    ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
-    return fig
-
 def create_blank_heatmap(layer_df):
     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
     contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
@@ -419,39 +440,88 @@ def create_blank_heatmap(layer_df):
     return fig
 
 
+################# heatmap coloring  ##############################################################
+def color_heatmap(fig, type, layer_df): #initial value populating
+    try:
+        if not isinstance(layer_df.index, pd.MultiIndex):
+            raise ValueError("Input 'fig' must be a Figure with a Heatmap trace at index 0.")
+        structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+        contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+
+        # 2. Convert MultiIndex Series to 2D DataFrame
+        df_2d = layer_df.unstack(level=0)['Value']
+        df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+        new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
+
+        # 4. Update existing heatmap trace (assumes 1 trace only)
+        if fig.data and isinstance(fig.data[0], go.Heatmap):
+            fig.data[0].z = new_z  # this controls coloring
+            fig.data[0].colorscale = custom_colorscale
+            fig.data[0].showscale = False
+            fig.data[0].hoverinfo = 'skip'
+        ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
+        return fig
+    
+    # --- Specific Error Handling ---
+    except (ValueError, TypeError) as e:
+        print(f"Input Validation Error in  color_heatmap:  {e}")
+        return fig # Return the original figure
+    except KeyError as e:
+        print(f"Data Structure Error in color_heatmap: Missing expected level or column: {e}")
+        return fig
+    # --- General Fallback Error Handling ---
+    except Exception as e:
+        print(f"An unexpected error in color_heatmap occurred: {e}")
+        return fig
+    
+
+
 ########################## highlighter filter ####################
 
 def filter_grey (fig, type, layer_df): #initial value populating
-    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
-    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+    try:
+        if not isinstance(layer_df.index, pd.MultiIndex):
+            raise ValueError("Input 'fig' must be a Figure with a Heatmap trace at index 0.")
+        structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+        contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
 
-    # 2. Convert MultiIndex Series to 2D DataFrame
-    df_2d = layer_df.unstack(level=0)['Value']
-    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-    new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
+        # 2. Convert MultiIndex Series to 2D DataFrame
+        df_2d = layer_df.unstack(level=0)['Value']
+        df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+        new_z = df_2d.values[::-1]                        # Matrix (rows reversed)
 
-     # Create mask for the condition
-    """" Set gray values for cells not meeting condition
-    Using None for values that don't meet the condition will make them transparent,
-    allowing a background color or another trace to show through if desired.
-    If a specific gray color is needed, you would assign a numerical value and
-    define that value in your colorscale to map to gray """
+        # Create mask for the condition
+        """" Set gray values for cells not meeting condition
+        Using None for values that don't meet the condition will make them transparent,
+        allowing a background color or another trace to show through if desired.
+        If a specific gray color is needed, you would assign a numerical value and
+        define that value in your colorscale to map to gray """
 
-    if(type== 595):
-        mask = (new_z >= 95) | (new_z <= 5)
-    elif(type== 1090):
-        mask = (new_z >= 90) | (new_z <= 10)
+        if(type== 595):
+            mask = (new_z >= 95) | (new_z <= 5)
+        elif(type== 1090):
+            mask = (new_z >= 90) | (new_z <= 10)
 
-    colored_z = np.where(mask, new_z, None)
-    # 4. Update existing heatmap trace (assumes 1 trace only)
-    if fig.data and isinstance(fig.data[0], go.Heatmap):
-        fig.data[0].z = colored_z  # this controls coloring
-        fig.data[0].showscale = False
-        fig.data[0].hoverinfo = 'skip'
-    ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
-    return fig
+        colored_z = np.where(mask, new_z, None)
+        # 4. Update existing heatmap trace (assumes 1 trace only)
+        if fig.data and isinstance(fig.data[0], go.Heatmap):
+            fig.data[0].z = colored_z  # this controls coloring
+            fig.data[0].showscale = False
+            fig.data[0].hoverinfo = 'skip'
+        ###If you want to style cells (e.g. bold outline or highlight based on a condition), you’ll need to use go.Heatmap + shapes or overlay a Scatter trace
+        return fig
 
-
+    # --- Specific Error Handling ---
+    except (ValueError, TypeError) as e:
+        print(f"Input Validation Error in filter_grey : {e}")
+        return fig # Return the original figure
+    except KeyError as e:
+        print(f"Data Structure Error: Missing expected level or column in filter_grey : {e}")
+        return fig
+    # --- General Fallback Error Handling ---
+    except Exception as e:
+        print(f"An unexpected error occurred in filter_grey: {e}")
+        return fig
 
 
 
@@ -461,53 +531,68 @@ def filter_grey (fig, type, layer_df): #initial value populating
 ######################################################## hover t3mplate ##########################3
 
 def hovertemplate_heatmap(heatmap, latest_df, risk_reward_df, risk_reward_diff_df, roll_down_df, percentile_df):
-    structure_order = latest_df.index.get_level_values('Structure').unique().tolist()
-    contract_order = latest_df.index.get_level_values('Contract').unique().tolist()
-    x_labels = structure_order
-    y_labels = contract_order[::-1]
+    try:
+        if not isinstance(latest_df.index, pd.MultiIndex):
+            raise ValueError("Input 'fig' must be a Figure with a Heatmap trace at index 0.")
+        structure_order = latest_df.index.get_level_values('Structure').unique().tolist()
+        contract_order = latest_df.index.get_level_values('Contract').unique().tolist()
+        x_labels = structure_order
+        y_labels = contract_order[::-1]
 
-    # 2. Convert MultiIndex Series to 2D DataFrame
-    processed_dfs = {}
-    source_data_map = {
-        'Latest': latest_df,
-        'Pct': percentile_df,
-        'R/Rd': risk_reward_diff_df,
-        'R/R': risk_reward_df,
-        'RlDn': roll_down_df,
-    }
-    for name, df_series in source_data_map.items():
-        if isinstance(df_series, pd.DataFrame):
-            # If it's a DataFrame with a 'Value' column, select it first.
-            df_series = df_series['Value']
-        # Unstack the 'Structure' level to become the columns.
-        df_2d = df_series.unstack(level='Structure')
-        df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-        processed_dfs[name] = df_2d
+        # 2. Convert MultiIndex Series to 2D DataFrame
+        processed_dfs = {}
+        source_data_map = {
+            'Latest': latest_df,
+            'Pct': percentile_df,
+            'R/Rd': risk_reward_diff_df,
+            'R/R': risk_reward_df,
+            'RlDn': roll_down_df,
+        }
+        for name, df_series in source_data_map.items():
+            if isinstance(df_series, pd.DataFrame):
+                # If it's a DataFrame with a 'Value' column, select it first.
+                df_series = df_series['Value']
+            # Unstack the 'Structure' level to become the columns.
+            df_2d = df_series.unstack(level='Structure')
+            df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+            processed_dfs[name] = df_2d
 
-    # hovertext ##
-    hover_text_matrix = []
-    for contract in y_labels:
-        row_texts = []
-        for structure in x_labels:
-            cell_info = []
-            for name, df in processed_dfs.items():
-                value = df.loc[contract, structure]
-                if pd.notna(value):
-                    # Format each factor on a new line
-                    cell_info.append(f"{name}: {value:.1f}")
+        # hovertext ##
+        hover_text_matrix = []
+        for contract in y_labels:
+            row_texts = []
+            for structure in x_labels:
+                cell_info = []
+                for name, df in processed_dfs.items():
+                    value = df.loc[contract, structure]
+                    if pd.notna(value):
+                        # Format each factor on a new line
+                        cell_info.append(f"{name}: {value:.1f}")
 
-            # Join all factors with an HTML line break
-            row_texts.append("<br>".join(cell_info))
-        hover_text_matrix.append(row_texts)
+                # Join all factors with an HTML line break
+                row_texts.append("<br>".join(cell_info))
+            hover_text_matrix.append(row_texts)
 
-      # Reconstruct the Figure object from the dictionary
-    heatmap = go.Figure(heatmap)
-    heatmap.update_traces(
-        selector=dict(type="heatmap"),  # Optional if only one trace
-        customdata= hover_text_matrix,
-        hovertemplate="<b>%{x} | %{y}</b><br>%{customdata}<extra></extra>"
-    )
-    return heatmap
+        # Reconstruct the Figure object from the dictionary
+        heatmap = go.Figure(heatmap)
+        heatmap.update_traces(
+            selector=dict(type="heatmap"),  # Optional if only one trace
+            customdata= hover_text_matrix,
+            hovertemplate="<b>%{x} | %{y}</b><br>%{customdata}<extra></extra>"
+        )
+        return heatmap
+    
+     # --- Specific Error Handling ---
+    except (ValueError, TypeError) as e:
+        print(f"Input Validation Error in hovertemplate_heatmap: {e}")
+        return heatmap # Return the original figure
+    except KeyError as e:
+        print(f"Data Structure Error: Missing expected level or column in hovertemplate_heatmap: {e}")
+        return heatmap
+    # --- General Fallback Error Handling ---
+    except Exception as e:
+        print(f"An unexpected error occurred  in hovertemplate_heatmap: {e}")
+        return heatmap
 
 ###################################################### side panel #############################
 def get_adjacent_values(str_data_3d,  x_val, y_val): #D3, SFR3

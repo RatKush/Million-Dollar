@@ -148,7 +148,7 @@ def load_data(lookback_prd, filepath="SR3_ED.xlsm"):
     #print(out_curve_df)
     return out_curve_df
 
-################################################################# outliers rempal fn ######################
+################################################################# outliers removal fn ######################
 #1 removes lower and upper 0.1 percentiles data
 def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     q_low = df.quantile(lower_quantile)
@@ -160,8 +160,10 @@ def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     return df_cleaned.interpolate(method='linear', limit_direction='both', axis=0)
 
 ## 2  outliers  for a df  # rolling mean ± k*std.         ### not that robust ----- sometimes outliers hides themselves due to high std causeed by themselves
-def process_series(series, window=21, k=2.5):
+def process_series(series, window=21, k=2.5, min_periods  = 5):
     series = pd.to_numeric(series, errors='coerce')
+    if series.count() < min_periods:
+        return series
     # Keep track of where the original NaNs were
     original_nans = series.isna()
     rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
@@ -191,7 +193,7 @@ def rolling_bounds_filter(df, window=21, k=2.5):
         raise TypeError("Input must be a pandas Series or DataFrame")
 
 ####3 IQR
-def process_series_iqr(series, window=21, k=1.5):
+def process_series_iqr(series, window=21, k=1.5,  min_periods  = 5):
     """
     Processes a single pandas Series to filter outliers using the rolling IQR method.
     
@@ -200,7 +202,8 @@ def process_series_iqr(series, window=21, k=1.5):
     """
     # Ensure data is numeric, converting non-numeric values to NaN
     series = pd.to_numeric(series, errors='coerce')
-    
+    if series.count() < min_periods:
+        return series
     # Keep track of where the original NaNs were to restore them later
     original_nans = series.isna()
 
@@ -278,7 +281,8 @@ def _rolling_sumproduct(row, ratio):
 index = [
     "Out", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
     "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
-    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1",
+    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)",
+    "1X On- 2X On+1", "2X On- 1X On+1", "2X On- 3X On+1", "3X On- 2X On+1", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1", 
     
 ]
 
@@ -310,6 +314,12 @@ ratio= [
     [1,-4,6,-4,1],
     [1, -1, -3, 3, 3, -3, -1, 1],
     [1, 0, -4, 0, 6, 0, -4, 0, 1],
+
+    [1,-2],
+    [2, -1],
+    [2, -3],
+    [3, -2],
+
     [1,-3,2],
     [2,-3,1],
     [2,-5,3],

@@ -169,22 +169,109 @@ div.tab--selected:hover {
     color: #ffffff;
 }
 
-/********************************************** tab7 side panel button cross********************************/
-/* assets/style.css */
+/*################################################### tab7 multi drop down  ############# */
 
-.panel-close-button {
-    color: white;
-    font-size: 1.75rem; /* Makes the 'x' larger and easier to click */
-    font-weight: bold;
-    line-height: 1;
-    opacity: 0.7;
-    transition: opacity 0.15s ease-in-out; /* Smooth transition for hover effect */
-  }
-  
-  .panel-close-button:hover {
-    opacity: 1; /* Makes the button fully opaque on hover */
-  }
-  
+
+/* --- Main Dropdown Control Box --- */
+#dropdown-ratio {
+    width: 100% !important;
+}
+
+#dropdown-wrapper .Select-control {
+    position: relative !important;
+    height: 60px !important;
+    min-height: 41px !important;
+    border: 1px solid black !important;
+    overflow: hidden !important;
+    /* The width and margin rules have been REMOVED from here */
+    width: 100% !important; 
+}
+
+/* This takes the container of selected items OUT of the normal flow to prevent expansion */
+#dropdown-wrapper .Select-multi-value-wrapper {
+    position: absolute !important;
+    top: 0; left: 0; right: 30px; bottom: 0;
+    padding-left: 8px;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
+    display: flex !important;
+    overflow-x: auto !important;   /* Allow horizontal scrolling when needed */
+}
+
+
+/* Hides the 'x' clear all button */
+#dropdown-wrapper .Select-clear {
+    display: none !important;
+}
+
+/* --- Floating Options Menu and Other Styling --- */
+
+/* This rule makes the dropdown menu float OVER content below it */
+#dropdown-wrapper .Select-menu-outer {
+    position: absolute !important;
+    z-index: 1050 !important;
+    width: 100% !important; /* Menu width will match the dropdown's width */
+    border: 1px solid black !important;
+    background-color: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* This rule targets the container for EACH selected item 'pill' */
+#dropdown-wrapper .Select-value {
+    font-size: 11px !important; /* Make the font smaller */
+    padding: 1px 5px !important;   /* Reduce the padding inside the pill */
+    margin-top: 0 !important;      /* Remove any extra top margin */
+    line-height: 1.4 !important;   /* Adjust line height for smaller font */
+}
+#dropdown-wrapper .Select-value-icon {
+    padding: 1px 5px !important;
+    font-size: 14px !important;
+}
+
+/* --- The rest of the styling for text, arrows, and options --- */
+#dropdown-wrapper .Select-placeholder,
+#dropdown-wrapper .Select-value-label {
+    color: black !important;
+}
+
+#dropdown-wrapper .Select-placeholder {
+    position: absolute !important;
+    top: 0; left: 8px; right: 30px; bottom: 0;
+    line-height: 29px !important;
+}
+
+#dropdown-wrapper .Select-arrow {
+    border-color: black transparent transparent !important;
+}
+
+#dropdown-wrapper .is-focused .Select-control {
+    box-shadow: none !important;
+}
+
+
+#dropdown-wrapper .Select-option,
+#dropdown-wrapper .Select-option label, /* Targets the label if it exists */
+#dropdown-wrapper .Select-option span   /* Targets the span that holds the text */
+{
+    color: black !important;
+}
+
+
+#dropdown-wrapper .Select-option {
+    color: black !important;
+    background-color: white !important;
+}
+
+#dropdown-wrapper .Select-option.is-focused {
+    background-color: #e9ecef !important;
+    color: black !important;
+}
+
+
+
+
+
+
 
 
 

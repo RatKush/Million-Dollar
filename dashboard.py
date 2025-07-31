@@ -260,8 +260,6 @@ default_tab7 = {
 
 
 
-
-
 ##################################################### app layout #############################################################
 # ------------------------------------------------
 # DASH LAYOUT
@@ -506,6 +504,22 @@ app.layout = dbc.Container([
                             }
                         ),
                         html.Div([
+                        #multi drop down 
+                            html.Div([
+                                html.Label("ratio", className="form-label", style={"width": "20%", "marginBottom": 0}),
+                                html.Div([
+                                    dcc.Dropdown(
+                                        id='dropdown-ratio',
+                                        options=[{'label': s, 'value': s} for s in index],
+                                        value=index[0:27],
+                                        multi=True,
+                                        #hide_selected=False,
+                                        clearable=False,
+                                    )
+                                ], style={"width": "80%"}) # The wrapper Div controls the width and alignment
+
+                            ], id='dropdown-wrapper', className="d-flex justify-content-between mb-2"),     
+
                             html.Div([
                                 html.Label("Local Window", className="form-label", style={"width": "68%", "marginBottom": 0}),
                                 dcc.Input(
@@ -1578,6 +1592,7 @@ def cached_compute_3d_df(out_df_json: dict, local_win: int, curve_len: int):
 )
 def toggle_buttons(*args):
     store = args[-1] or {}
+
     triggered_id = ctx.triggered_id
     if not triggered_id:
         return dash.no_update
@@ -1643,6 +1658,7 @@ def toggle_fullscreen(n_clicks, is_fullscreen):
     Output('heatmap-matrix', 'figure'),
     Output('heatmap-ready-signal', 'data'),
     Input('stored-data', 'data'),
+    Input('dropdown-ratio', 'value'),
     Input('input-local-window', 'value'),
     Input('input-curve-length', 'value'),
     Input('tab7-buttons-store-price', 'data'),
@@ -1650,7 +1666,7 @@ def toggle_fullscreen(n_clicks, is_fullscreen):
     Input('tabs', 'value'),
     prevent_initial_call=True
 )
-def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store_price, toggle_store_color, tab):
+def update_tab_heatmap_basic(stored,selected_ratio, local_win, curve_len, toggle_store_price, toggle_store_color, tab):
     if not stored:
         return warning_plot("⚠ data not available (no stored data)"), time.time()
 
@@ -1661,18 +1677,27 @@ def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store_price, t
     #     columns=stored["out_df"]["columns"]
     # )
     #str_data_3d = compute_3d_structure(out_df, local_win=local_win, curve_length=curve_len)
+    if not selected_ratio:
+        selected_ratio=  {"Out", "S3","L3","L6"} # Return an empty figure
     
+    # commodity = stored.get("comdty")
+    # if commodity in {"meets", "SR1", "SZI0", "FVS", "VIX", "VIX- VOXX"}:
+    #     initial_list=  {"Out", "S3","L3","L6", "1X On- 2X On+1", "2X On- 1X On+1", "2X On- 3X On+1", "3X On- 2X On+1", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1" }
+
+
     out_df_json = stored.get("out_df")
     if out_df_json is None:
         raise PreventUpdate  # or handle gracefully
-    str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
+    
+    str_data_3d = cached_compute_3d_df(out_df_json,  local_win, curve_len)
+    filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
 
-    latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
+    latest_date =  filtered_3d_df.index.get_level_values("Date").unique()[0]
     # Slice the data to get the datasets for the heatmap layers.
-    latest_df = str_data_3d.loc[latest_date]
+    latest_df =  filtered_3d_df.loc[latest_date]
     risk_reward_df, risk_reward_diff_df, roll_down_df = compute_risk_reward_roll_df(latest_df)
-    percentile_df = compute_percentile_df(str_data_3d)
-
+    percentile_df = compute_percentile_df( filtered_3d_df)
+    #print("pd", percentile_df)
     values_btn_fig_map = {
         "btn-price": lambda: generate_heatmap(1, latest_df),
         "btn-percentile": lambda: generate_heatmap(0, percentile_df),
@@ -1684,7 +1709,6 @@ def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store_price, t
     heatmap = None
     for btn_id, generate_func in values_btn_fig_map.items():
         if toggle_store_price.get(btn_id, False):
-            # As soon as the active button is found, generate and return its heatmap.
             heatmap= generate_func() 
             break
             
@@ -1729,29 +1753,34 @@ def update_tab_heatmap_basic(stored, local_win, curve_len, toggle_store_price, t
     #Input('enrich-hover-btn', 'n_clicks'),  # This trigger could be a button, interval, etc.
     State('heatmap-matrix', 'figure'),      # Gets the figure that is ALREADY on the screen
     State('stored-data', 'data'),           # Gets the data needed for hover calculations
+    Input('dropdown-ratio', 'value'),
     State('input-local-window', 'value'),
     State('input-curve-length', 'value'),
     prevent_initial_call=True
 )
-def update_heatmap_hoverinfo(n_intervals, existing_figure, stored, local_win, curve_len):
+def update_heatmap_hoverinfo(n_intervals, existing_figure, stored,selected_ratio, local_win, curve_len):
     # 1. Check Trigger and Validate State
     # Only run if the callback was triggered and a figure already exists.
     #print("uranium enrichment loading ..." )
     if not existing_figure:
         return dash.no_update
     #print("uranium enrichment loading ...." )
+    if not selected_ratio:
+        selected_ratio=  {"Out", "S3","L3"} # Return an empty figure
+
+
     # 2. Re-calculate Data Needed for Hover # For optimization, this data could also be passed via a dcc.Store.
     out_df_json = stored.get("out_df")
     if out_df_json is None:
         raise PreventUpdate  # or handle gracefully
     str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
-
-    latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
+    filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
+    latest_date =filtered_3d_df.index.get_level_values("Date").unique()[0]
     
     # Get all the necessary DataFrames for the rich hover text.
-    latest_df = str_data_3d.loc[latest_date]
+    latest_df = filtered_3d_df.loc[latest_date]
     risk_reward_df, risk_reward_diff_df, roll_down_df = compute_risk_reward_roll_df(latest_df)
-    percentile_df = compute_percentile_df(str_data_3d)
+    percentile_df = compute_percentile_df(filtered_3d_df)
 
     enriched_figure = hovertemplate_heatmap(
         existing_figure, latest_df, risk_reward_df, risk_reward_diff_df, roll_down_df, percentile_df
@@ -1765,13 +1794,17 @@ def update_heatmap_hoverinfo(n_intervals, existing_figure, stored, local_win, cu
     Output('heatmap-details-panel', 'style'),
     Input('heatmap-matrix', 'clickData'),
     State('stored-data', 'data'),
+    Input('dropdown-ratio', 'value'),
     State('input-local-window', 'value'),
     State('input-curve-length', 'value'),
     prevent_initial_call=True
 )
-def display_cell_details(click_data, stored, local_win, curve_len):
+def display_cell_details(click_data, stored,selected_ratio, local_win, curve_len):
     if click_data is None:
         return dash.no_update, dash.no_update
+    
+    if not selected_ratio:
+        selected_ratio=  {"Out", "S3","L3"} # Return an empty figure
     # --- 1. Extract Info from the Clicked Cell ---
     point = click_data['points'][0]
     x_val, y_val = point['x'], point['y']
@@ -1781,9 +1814,9 @@ def display_cell_details(click_data, stored, local_win, curve_len):
     if out_df_json is None:
         raise PreventUpdate  # or handle gracefully
     str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
-
-    clicked_series= str_data_3d.loc[(slice(None), x_val, y_val)]
-    prev_val, next_val= get_adjacent_values(str_data_3d,  x_val, y_val)
+    filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
+    clicked_series=  filtered_3d_df.loc[(slice(None), x_val, y_val)]
+    prev_val, next_val= get_adjacent_values( filtered_3d_df,  x_val, y_val)
     #print(clicked_series)
     panel_content = generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_val)
     return panel_content, {'display': 'block'}
