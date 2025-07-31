@@ -12,10 +12,10 @@ import difflib
 
 def extract_comdty(filepath):
     text_lower = filepath.lower()
-    match_pool= ["sr3", "sr1", "so3", "er", "er3", "corra", "szi0", "meeting", "meet", "sonia", "sofr", "euribor","meetings", "sa3", "saron", "vix vs voxx", "vix", "vx", "VOXX", "vol", "FVS", "fvs", "vstoxx"]
+    match_pool= ["SR3_ED","sr3", "sr1", "so3", "er", "er3", "corra", "szi0", "meeting", "meet", "sonia", "sofr", "euribor","meetings", "sa3", "saron", "vix vs voxx", "vix", "vx", "VOXX", "vol", "FVS", "fvs", "vstoxx"]
     #best_match = difflib.get_close_matches(text_lower, match_pool, n=1, cutoff=0.4)
     mapping= {
-        "sr3": "SR3", "sr1": "SR1", "so3": "S03", "er": "ER", "er3": "ER", "corra":"CoRRa", "szi0":"SZI0", "meeting": "meets", "meet": "meets", "sonia":"SO3", "sofr":"SR3", "euribor":"ER","meetings":"meets", "sa3":"SA3", "saron" :"SA3", "eurodollar":"ED", "ed": "ED", "vix": "VIX", "vx":"VIX", "VOXX": "FVS" , "FVS":"FVS", "fvs":"FVS", "vstoxx":"FVS", "vol":"VIX", "vix vs voxx": "VIX- VOXX"
+        "SR3_ED": "SR3_ED", "sr3": "SR3", "sr1": "SR1", "so3": "S03", "er": "ER", "er3": "ER", "corra":"CoRRa", "szi0":"SZI0", "meeting": "meets", "meet": "meets", "sonia":"SO3", "sofr":"SR3", "euribor":"ER","meetings":"meets", "sa3":"SA3", "saron" :"SA3", "eurodollar":"ED", "ed": "ED", "vix": "VIX", "vx":"VIX", "VOXX": "FVS" , "FVS":"FVS", "fvs":"FVS", "vstoxx":"FVS", "vol":"VIX", "vix vs voxx": "VIX- VOXX"
     }
      # Custom similarity ranking
     scored = []
@@ -90,7 +90,7 @@ def process_help_calculation(comdty, out_df, str_name, lookback_prd, curve_lengt
         lookback_prd = str_df.shape[0] - 1  # fallback to all rows
 
     lookback_prd = max(0, min(lookback_prd, str_df.shape[0] - 1))
-    str_df = str_df.head(lookback_prd + 1)
+    str_df = str_df.head(lookback_prd)
 
     #print(comdty)
     return str_df, comdty
@@ -127,14 +127,14 @@ def fill_missing_values(df):
     return df.apply(_fill_mid_nan, axis=1)
 
 
-def load_data(lookback_prd, filepath="SR3.xlsx"):
+def load_data(lookback_prd, filepath="SR3_ED.xlsm"):
     """
     Load structured curve data from Excel, trimming to lookback_prd columns 
     for speed. Returns a DataFrame indexed by date, with one column per contract.
     """
     df = pd.read_excel(filepath, sheet_name=0)
     
-    max_cols = min(df.shape[1] - 1, lookback_prd)
+    max_cols = min(df.shape[1] - 1, lookback_prd+21)
     df = df.iloc[:, 0 : max_cols + 1]
     
     xl_dates = pd.to_numeric(df.iloc[0, 1:].values, errors='coerce')
@@ -148,8 +148,8 @@ def load_data(lookback_prd, filepath="SR3.xlsx"):
     #print(out_curve_df)
     return out_curve_df
 
-
-
+################################################################# outliers removal fn ######################
+#1 removes lower and upper 0.1 percentiles data
 def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     q_low = df.quantile(lower_quantile)
     q_high = df.quantile(upper_quantile)
@@ -159,31 +159,90 @@ def remove_outliers(df, lower_quantile=0.01, upper_quantile=0.99):
     print("CALCULATED")
     return df_cleaned.interpolate(method='linear', limit_direction='both', axis=0)
 
-## use it in place of remove  outliers  for a df  # rolling mean ± k*std.
-def rolling_bounds_filter(df, window=21, k=2.5):
-    def process_series(series):
-        series = pd.to_numeric(series, errors='coerce')
-        rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
-        rolling_std = series.rolling(window=window, center=True,  min_periods=5).std()
-        upper_bound = rolling_mean + k * rolling_std
-        lower_bound = rolling_mean - k * rolling_std
-        # Replace only where bounds are valid (not NaN)
-        mask = (series < lower_bound) | (series > upper_bound)
-        filtered = series.copy()
-        filtered[mask] = np.nan
-        
-        return filtered.interpolate(method='linear', limit_direction='both', axis=0)
+## 2  outliers  for a df  # rolling mean ± k*std.         ### not that robust ----- sometimes outliers hides themselves due to high std causeed by themselves
+def process_series(series, window=21, k=2.5, min_periods  = 5):
+    series = pd.to_numeric(series, errors='coerce')
+    if series.count() < min_periods:
+        return series
+    # Keep track of where the original NaNs were
+    original_nans = series.isna()
+    rolling_mean = series.rolling(window=window, center=True,  min_periods=5).mean()
+    rolling_std = series.rolling(window=window, center=True,  min_periods=5).std()
+    upper_bound = rolling_mean + k * rolling_std
+    lower_bound = rolling_mean - k * rolling_std
+    # Replace only where bounds are valid (not NaN)
+    mask = (series < lower_bound) | (series > upper_bound)
+    filtered = series.copy()
+    filtered[mask] = np.nan
     
+     # Interpolate to fill only the new NaNs created by the filter
+    interpolated = filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+    # Re-apply the original NaNs so the tail remains empty
+    interpolated[original_nans] = np.nan
+    
+    return interpolated
+
+
+def rolling_bounds_filter(df, window=21, k=2.5):
     if isinstance(df, pd.Series):
-        return process_series(df)
+        return process_series(df, window=window, k=k)
     elif isinstance(df, pd.DataFrame):
-        return df.apply(process_series)
+        return df.apply(process_series, window=window, k=k)
     else:
         raise TypeError("Input must be a pandas Series or DataFrame")
 
+####3 IQR
+def process_series_iqr(series, window=21, k=1.5,  min_periods  = 5):
+    """
+    Processes a single pandas Series to filter outliers using the rolling IQR method.
+    
+    This function identifies outliers, replaces them with NaN, interpolates the new 
+    gaps, and then restores any NaN values that existed in the original series.
+    """
+    # Ensure data is numeric, converting non-numeric values to NaN
+    series = pd.to_numeric(series, errors='coerce')
+    if series.count() < min_periods:
+        return series
+    # Keep track of where the original NaNs were to restore them later
+    original_nans = series.isna()
+
+    # Calculate rolling Q1 (25th percentile) and Q3 (75th percentile)
+    q1 = series.rolling(window=window, center=True, min_periods=5).quantile(0.25)
+    q3 = series.rolling(window=window, center=True, min_periods=5).quantile(0.75)
+    
+    # Calculate the rolling Interquartile Range (IQR)
+    iqr = q3 - q1
+    
+    # Define the upper and lower outlier boundaries
+    upper_bound = q3 + k * iqr
+    lower_bound = q1 - k * iqr
+    
+    # Create a boolean mask to identify outliers
+    outlier_mask = (series < lower_bound) | (series > upper_bound)
+    
+    # Create a copy of the series and replace outliers with NaN
+    filtered = series.copy()
+    filtered[outlier_mask] = np.nan
+    
+    # Interpolate to fill only the new gaps created by the filter
+    interpolated = filtered.interpolate(method='linear', limit_direction='both', axis=0)
+
+    # Re-apply the original NaNs to ensure the tail remains empty
+    interpolated[original_nans] = np.nan
+    
+    return interpolated
 
 
+def rolling_iqr_filter(df, window=21, k=2):
+    if isinstance(df, pd.Series):
+        return process_series_iqr(df, window=window, k=k)
+    elif isinstance(df, pd.DataFrame):
+        return df.apply(process_series_iqr, window=window, k=k)
+    else:
+        raise TypeError("Input must be a pandas Series or DataFrame")
 
+########################################################################################################################
 
 
 
@@ -222,15 +281,17 @@ def _rolling_sumproduct(row, ratio):
 index = [
     "Out", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
     "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
-    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1"
+    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)",
+    "1X On- 2X On+1", "2X On- 1X On+1", "2X On- 3X On+1", "3X On- 2X On+1", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1", 
+    
 ]
 
 ratio= [
-    [0.01],
-    [1, -1],
-    [1, 0, -1],
-    [1, 0, 0, 0, -1],
-    [1, -2, 1],
+    [0.01],                                     # "Out"
+    [1, -1],                                    # "S3"
+    [1, 0, -1],                                 # "S6"
+    [1, 0, 0, 0, -1],                           # "S12"
+    [1, -2, 1],                                 # "L3"
     [1, -1, -1, 1],
     [1, -1, -1, 1],
     [1, 0, -2, 0, 1],
@@ -253,6 +314,12 @@ ratio= [
     [1,-4,6,-4,1],
     [1, -1, -3, 3, 3, -3, -1, 1],
     [1, 0, -4, 0, 6, 0, -4, 0, 1],
+
+    [1,-2],
+    [2, -1],
+    [2, -3],
+    [3, -2],
+
     [1,-3,2],
     [2,-3,1],
     [2,-5,3],
@@ -265,3 +332,28 @@ ratio_table = pd.DataFrame(ratio, index=index)
 # out_df, str_df, series,cmdty, str_name, str_num= process_structure("SR3.xlsx", "S3", 8, 20, 15)
 # df= rolling_bounds_filter(out_df, window=21, k=2.5)
 # print(out_df)
+
+
+################################### fetch effr ######################################
+def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lookback_prd=250):
+    df = pd.read_excel(filepath, sheet_name = sheetname, header= None)
+     
+    max_cols = min(df.shape[1]-1, lookback_prd+22)
+    df = df.iloc[0:25, 1 : max_cols]
+
+    #columns names  from top row i.e row 3
+    xl_dates = pd.to_numeric(df.iloc[2, 0:].values, errors='coerce')
+    dates = pd.to_datetime(xl_dates, unit='D', origin='1899-12-30')
+
+    # final data container
+    rates_df= df.iloc[[3,9,15,21]].copy()  # 2Yr, 5Yr, 10Yr, rates
+    rates_df.index = ["2Yr", "5Yr", "10Yr", "Rates"]
+    rates_df.columns= dates
+    for i in range(len(rates_df) - 1): # passing all except rates row
+        rates_df.iloc[i]= rolling_bounds_filter(rates_df.iloc[i], window=21, k=2.5)
+
+    max_cols = min(rates_df.shape[1]-1 , lookback_prd)
+    rates_df= rates_df.iloc[:, 0:max_cols].copy()
+    #print(rates_df.head(), rates_df.shape)
+    
+    return rates_df

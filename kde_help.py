@@ -62,10 +62,15 @@ def compute_stats(series):
     except Exception:
         mod_val = np.nan
 
+    std_val = series.std()
+    z_val = np.nan
+    if std_val and not np.isnan(std_val):
+        z_val = round((series.iloc[0] - series.mean()) / std_val, 1)
+
     return {
         "skew": round(series.skew(), 1),
         "kurt": round(series.kurt(), 1),
-        "z": round((series.iloc[0] - series.mean()) / series.std(), 1),
+        "z":  z_val,
         "mean": series.mean(),
         "med": np.median(series),
         "mod": mod_val,
@@ -74,6 +79,7 @@ def compute_stats(series):
 
 
 def get_percentile(series, pc):
+    series = pd.to_numeric(series, errors='coerce').dropna()
     return np.percentile(series, pc).round(1)
 
 
@@ -158,7 +164,7 @@ def classify_cycle(series,comdty, out_df,lookback_prd, base_str, sum_first_n_bas
 
     ##base_df= series
     base_df, comdty= process_help_calculation(comdty, out_df, base_str, lookback_prd, 15)
-
+    
     for date, row in base_df.iterrows():
         if base_df.index.min() > date:
             break
@@ -187,6 +193,7 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
     Plot KDE with optional overlays (median, mode, BB, local stats, value line).
     """
     lbp = min(len(series), lookback_prd)
+    #print(len(series))
     title = f"{Comdty}{str_name}({str_number})@{lbp}d"
     latest_value = round(series.iloc[0], 2)
     stats = compute_stats(series)
@@ -281,11 +288,12 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
     #fig.show(config={"scrollZoom": True})
     return fig
 
- # for sub- series
+ # for sub- series #############################################################################
 def plotted(plot_flags,Comdty,str_name,str_number, sub_series, full_series, pc_line, val_line, local_win, local_win_std, cycle_name ):
     """
     Plot KDE distribution and overlays for a specific cycle subset.
     """
+    #print(cycle_name, sub_series)
     if isinstance(sub_series, list):
         sub_series = pd.Series(sub_series)
     if isinstance(full_series, list):
@@ -314,8 +322,10 @@ def plotted(plot_flags,Comdty,str_name,str_number, sub_series, full_series, pc_l
         add_band_mask(fig, stats['mean'] - 2 * stats['std'], stats['mean'] + 2 * stats['std'], "KDE", name=f"bb (σ=2)")
 
     if plot_flags.get("band68", 1):
+        
         l= get_percentile(sub_series, 17)
         u= get_percentile(sub_series, 83)
+        #print("l", l, "u", u)
         add_band_mask(fig, l, u, "KDE", name=f"band68")
 
     if plot_flags.get("band95", 1):

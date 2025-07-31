@@ -1,3 +1,20 @@
+/*  ************************************************* tABS ******************************************************************/
+
+/* Hover effect on tabs*/
+div.tab:hover,
+div.tab--selected:hover {
+    border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-left:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-right:  1px solid rgba(255, 255, 255, 0.2) !important;
+    border-bottom: none !important;
+}
+
+
+
+
+
+/*  ************************************************* kde control panell ******************************************************************/
+
 #kde-flags-shared-wrapper {
     position: absolute;
     top: 140px;
@@ -18,8 +35,9 @@
     border: 1px solid #3a3f4b;       /* Same border as tab borders */
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;            /* Soft rounded corners */
-
-    padding: 16px 12px;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    padding: 8px 4px;
     /*margin-top: 8px;*/
     margin-bottom: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); /* Soft shadow */
@@ -56,3 +74,205 @@
 .control-panel-1 .form-check-input:checked + .form-check-label {
     color: #ffffff;
 }
+
+.hidden-row {
+    display: none;
+}
+
+
+/*##################################################### tab 2 buttons #######################################################*/
+/* Button styling for chart tab toggle buttons */
+
+.tab-button {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 8px;
+    font-weight: 350;
+    transition: background-color 0.3s, color 0.3s;
+    height: 32px;
+    margin-right: 5px;
+    cursor: pointer;
+
+    padding: 4px 16px;
+}
+
+.tab-button:hover {
+    background-color: #1f2128;
+    color: #c0c4cc;
+    border-top: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-right: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid rgba(255, 255, 255, 0.2) ;
+    border-left: 1px solid #2b2e35;
+    height: 34px;
+    font-weight: 400;
+}
+
+
+.tab-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border-top: 1px solid #5e636e;
+    border-right: 1px solid #5e636e;
+    border-left: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+
+.tab-button.selected{
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    height: 34px;
+    font-weight: 400;
+}
+/*  Hover (applies to both) */
+.tab-button.selected:hover {
+    background-color: #2b2e35;
+    color:  #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2) ;
+  
+}
+
+
+/*################################################### tab7 buttons #########################################################*/
+
+.tab7-button {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 8px !important;  /* override Bootstrap */
+    font-weight: 350;
+    transition: background-color 0.3s, color 0.3s;
+    width: 100%;
+    cursor: pointer;
+    margin: 5px 0 5px 0
+}
+
+.tab7-button:hover {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab7-button.selected,
+.tab7-button.active {
+    background-color: #1f2128;
+    color: #ffffff;
+    border: 1px solid #5e636e;
+    font-weight: 400;
+}
+
+.tab7-button.selected:hover,
+.tab7-button.active:hover {
+    background-color: #1f2128;
+    color: #ffffff;
+}
+
+/*################################################### tab7 multi drop down  ############# */
+
+
+/* --- Main Dropdown Control Box --- */
+#dropdown-ratio {
+    width: 100% !important;
+}
+
+#dropdown-wrapper .Select-control {
+    position: relative !important;
+    height: 60px !important;
+    min-height: 41px !important;
+    border: 1px solid black !important;
+    overflow: hidden !important;
+    /* The width and margin rules have been REMOVED from here */
+    width: 100% !important; 
+}
+
+/* This takes the container of selected items OUT of the normal flow to prevent expansion */
+#dropdown-wrapper .Select-multi-value-wrapper {
+    position: absolute !important;
+    top: 0; left: 0; right: 30px; bottom: 0;
+    padding-left: 8px;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
+    display: flex !important;
+    overflow-x: auto !important;   /* Allow horizontal scrolling when needed */
+}
+
+
+/* Hides the 'x' clear all button */
+#dropdown-wrapper .Select-clear {
+    display: none !important;
+}
+
+/* --- Floating Options Menu and Other Styling --- */
+
+/* This rule makes the dropdown menu float OVER content below it */
+#dropdown-wrapper .Select-menu-outer {
+    position: absolute !important;
+    z-index: 1050 !important;
+    width: 100% !important; /* Menu width will match the dropdown's width */
+    border: 1px solid black !important;
+    background-color: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* This rule targets the container for EACH selected item 'pill' */
+#dropdown-wrapper .Select-value {
+    font-size: 11px !important; /* Make the font smaller */
+    padding: 1px 5px !important;   /* Reduce the padding inside the pill */
+    margin-top: 0 !important;      /* Remove any extra top margin */
+    line-height: 1.4 !important;   /* Adjust line height for smaller font */
+}
+#dropdown-wrapper .Select-value-icon {
+    padding: 1px 5px !important;
+    font-size: 14px !important;
+}
+
+/* --- The rest of the styling for text, arrows, and options --- */
+#dropdown-wrapper .Select-placeholder,
+#dropdown-wrapper .Select-value-label {
+    color: black !important;
+}
+
+#dropdown-wrapper .Select-placeholder {
+    position: absolute !important;
+    top: 0; left: 8px; right: 30px; bottom: 0;
+    line-height: 29px !important;
+}
+
+#dropdown-wrapper .Select-arrow {
+    border-color: black transparent transparent !important;
+}
+
+#dropdown-wrapper .is-focused .Select-control {
+    box-shadow: none !important;
+}
+
+
+#dropdown-wrapper .Select-option,
+#dropdown-wrapper .Select-option label, /* Targets the label if it exists */
+#dropdown-wrapper .Select-option span   /* Targets the span that holds the text */
+{
+    color: black !important;
+}
+
+
+#dropdown-wrapper .Select-option {
+    color: black !important;
+    background-color: white !important;
+}
+
+#dropdown-wrapper .Select-option.is-focused {
+    background-color: #e9ecef !important;
+    color: black !important;
+}
+
+
+
+
+
+
+
+
+
+
