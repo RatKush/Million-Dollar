@@ -411,6 +411,8 @@ def generate_heatmap(rounding, layer_df): #initial value populating
         #     family="Orbitron"
         #  )
     )
+
+  
     return fig
 
 
@@ -664,9 +666,10 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
             x= reversed_series.index,
             y= reversed_series,
             mode='lines',
-            line_shape='spline',
+            #line_shape='spline',
+            line_shape='linear',
             line=dict(width=2, color='#0d6efd'),
-            fill='tozeroy', 
+            #fill='tozeroy', 
             fillcolor='rgba(13, 110, 253, 0.2)'
         )
     )
@@ -677,11 +680,12 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
         margin=dict(l=0, r=0, t=4, b=4),
         height=60,
         xaxis=dict(showgrid=False, showticklabels=False, type='category'),
-        yaxis=dict(showgrid=False, showticklabels=False),
+        yaxis=dict(showline=True, linecolor='gray',showgrid=False, ticks='outside',tickfont=dict(size=8) ),
+        #showgrid=True, gridcolor='lightgray', gridwidth=0.5,layer='below traces', showticklabels=False
     )
 
     #step 2   Mini Bar Chart: Volatility or Daily Delta View
-    print(reversed_series, reversed_series.diff())
+    #print(reversed_series, reversed_series.diff())
     barchart_cod_fig = go.Figure(
         go.Bar(
             x=reversed_series.index,
