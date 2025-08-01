@@ -174,4 +174,37 @@ div.tab--selected:hover {
 
 
 
+/* Target the entire dropdown by ID */
+#dropdown-ratio .Select-control {
+    background-color: #2b2e35 !important;
+    color: #dcdfe4 !important;
+    border-color: #444 !important;
+}
+
+/* Style selected value badges */
+#dropdown-ratio .Select-value {
+    background-color: #383c44 !important;
+    color: #dcdfe4 !important;
+    border: 1px solid #4a4f57 !important;
+    font-size: 10px !important;
+    padding: 2px 6px;
+    margin: 2px 4px;
+    border-radius: 4px;
+}
+
+/* Style the input box inside dropdown */
+#dropdown-ratio .Select-input > input {
+    color: #dcdfe4 !important;
+    background-color: #2b2e35 !important;
+}
+
+/* Style the dropdown menu */
+#dropdown-ratio .Select-menu-outer {
+    background-color: #2b2e35 !important;
+    color: #dcdfe4 !important;
+}
+
+
+
+
 
