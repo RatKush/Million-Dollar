@@ -205,6 +205,19 @@ div.tab--selected:hover {
 }
 
 
+/* adding top scroller in the table found in tab 1_2*/
+/* Flip horizontal scrollbar to top */
+/* CSS-only solution - rotate the table to get scrollbar on top */
 
+.ag-theme-alpine-dark .ag-body-horizontal-scroll {
+    position: absolute;
+    top: 0;
+    z-index: 100;
+    height: 15px;
+}
+
+.ag-theme-alpine-dark .ag-body-viewport {
+    margin-top: 17px;
+}
 
 
