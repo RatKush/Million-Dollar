@@ -1,6 +1,7 @@
 from str_cal import  rolling_bounds_filter,fill_missing_values,load_data, index, get_ratio, rolling_iqr_filter
 import pandas as pd
 import numpy as np
+from scipy.stats import percentileofscore
 import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
 from scipy.stats import percentileofscore
@@ -79,7 +80,7 @@ def handle_outliers(series: pd.Series, window_size: int, threshold: float, metho
 
 
 
-def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names , local_win=21, curve_length=15 ) -> pd.DataFrame:
+def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names , local_win=21, curve_length=20 ) -> pd.DataFrame:
     """
     Efficiently compute a MultiIndex DataFrame with shape (Date, Structure, Contract).
     - Z axis: Dates (depth)
@@ -89,174 +90,364 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= structure_names 
     
     Returns a long-form pandas DataFrame with a MultiIndex.
     """
-    all_frames = []  # Temporary list to store DataFrames for each structure
-    dates = out_df.index[:local_win]  # Only use local window of most recent dates
-    contracts = out_df.columns         # All contract labels, e.g., ['EDU5', 'EDZ5', ...]
+    if out_df.empty:
+        return pd.DataFrame(columns=["Value"]).set_index(["Date", "Structure", "Contract"])
     
+    all_frames = []  # Temporary list to store DataFrames for each structure
+    dates = out_df.index[: min(local_win, len(out_df))] # Only use local window of most recent dates
+    contracts = out_df.columns.to_numpy()         # All contract labels, e.g., ['EDU5', 'EDZ5', ...]
+    n_contracts = len(contracts)
+    curve_length = min(curve_length, n_contracts)
+    rows = out_df.loc[dates].to_numpy()
+    records = []
+
     # Loop over each structure (e.g., L3, L6, L12...)
     for struct in structure_names:
-        weights = np.array(get_ratio(struct))  # Convert the structure ratio into a NumPy array
-        n = len(weights)                       # Length of the structure (e.g., 3 for butterfly)
-        struct_data = []  # To store daily results for this structure
-        for date in dates:  # Loop over each date in the rolling window
-            row = out_df.loc[date]
-            row = handle_outliers(series=row, window_size=10, threshold=3.0, method='replace')
-            row= row.to_numpy() # Convert the contract row (on a single date) into a NumPy array
-            result = np.full(len(contracts), np.nan)  # Start with all NaNs (same length as contract list
-            for i in range(len(contracts) - n + 1):  # Slide a rolling window of size `n` across the contract values
-                # Compute dot product between weights and contract window values
-                result[i] = np.dot(row[i:i + n], weights) * 100  # Multiply by 100 as per your logic
-            series = pd.Series(result, index=contracts) # Convert result into a Series with contract names as index
-            #series_filtered= rolling_iqr_filter(series, window=21, k=2)
-            #print( date, struct, series)
-            series_filtered = handle_outliers(series=series, window_size=10, threshold=3.0, method='replace')
-            # 
-            series_trimmed = series_filtered.iloc[:curve_length]
-            # Build a DataFrame for this date and structure
-            temp_df = pd.DataFrame({
-                "Date": date,                             # constant
-                "Structure": struct,                      # constant
-                "Contract": series_trimmed.index,         # contract names
-                "Value": series_trimmed.values            # computed structure values
-            })
+        weights = np.array(get_ratio(struct))
+        n = len(weights)
 
-            struct_data.append(temp_df)  # Append this day's result to list
-        # Concatenate all dates for one structure into a single DataFrame
-        all_frames.append(pd.concat(struct_data))
-    # Concatenate all structures into final long-form DataFrame
-    final_df = pd.concat(all_frames)
-    # Set MultiIndex (Date, Structure, Contract) and return
+        # Skip if structure size > available contracts
+        if n > n_contracts:
+            continue
+
+        for d_idx, date in enumerate(dates):
+            # Outlier handling ONCE at row level
+            row_series = pd.Series(rows[d_idx], index=contracts)
+            row = handle_outliers(series=row_series,
+                                  window_size=10,
+                                  threshold=3.0,
+                                  method='replace').to_numpy()
+
+            # Convolution (sliding dot product)
+            conv = np.convolve(row, weights[::-1], mode="valid") * 100
+            result = np.full(n_contracts, np.nan)
+            result[: len(conv)] = conv
+
+            # Trim safely
+            series_trimmed = pd.Series(result, index=contracts).iloc[:curve_length]
+
+            # Store as records
+            records.extend(
+                {"Date": date, "Structure": struct, "Contract": c, "Value": v}
+                for c, v in zip(series_trimmed.index, series_trimmed.values)
+            )
+
+    if not records:
+        return pd.DataFrame(columns=["Value"]).set_index(["Date", "Structure", "Contract"])
+
+    final_df = pd.DataFrame.from_records(records)
     return final_df.set_index(["Date", "Structure", "Contract"])
 
 
-def compute_percentile_df(str_data_3d):
-    latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
-    latest_df = str_data_3d.loc[(latest_date)]
-    percentile_rank_df = {}
-    for (structure, contract), row in latest_df.iterrows():
-        try:
-            # full series for this (structure, contract) over time
-            series = str_data_3d.xs((structure, contract), level=("Structure", "Contract"))["Value"].dropna()
-            if series.empty:
-                percentile= None
+def compute_percentile_df(str_data_3d: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute percentile rank of latest values vs their full historical distribution.
+    Returns MultiIndex DataFrame: (Structure, Contract) -> Percentile
+    """
+    if str_data_3d.empty:
+        return pd.DataFrame(columns=["Value"]).set_index(["Structure", "Contract"])
 
-            latest_value = row["Value"]
-            # print(series.head())
-            # print(latest_value)
-            if pd.isna(latest_value):
-                return None
+    # Get the latest available date safely
+    latest_date = str_data_3d.index.get_level_values("Date").max()
+
+    try:
+        latest_df = str_data_3d.xs(latest_date, level="Date")
+    except KeyError:
+        return pd.DataFrame(columns=["Value"]).set_index(["Structure", "Contract"])
+
+    results = {}
+
+    # Group by (Structure, Contract) once for efficiency
+    grouped = str_data_3d.groupby(level=["Structure", "Contract"])
+
+    for (structure, contract), latest_row in latest_df.iterrows():
+        latest_value = latest_row["Value"]
+
+        if pd.isna(latest_value):
+            results[(structure, contract)] = None
+            continue
+
+        try:
+            # Full series for this (structure, contract) across time
+            series = grouped.get_group((structure, contract))["Value"].dropna()
+            if series.empty:
+                results[(structure, contract)] = None
             else:
                 percentile = percentileofscore(series, latest_value, kind="mean")
-            percentile_rank_df[(structure, contract)] = percentile # store
-
+                results[(structure, contract)] = percentile
         except KeyError:
-            percentile_rank_df[(structure, contract)] = None  # or np.nan
-    
-    percentile_rank_df = pd.DataFrame.from_dict( # Step 5: create final DataFrame
-        percentile_rank_df, orient='index', columns=['Value']
-    )
+            results[(structure, contract)] = None  # missing history
 
+    # Build final DataFrame with explicit MultiIndex
+    percentile_rank_df = pd.DataFrame.from_dict(results, orient="index", columns=["Value"])
     percentile_rank_df.index = pd.MultiIndex.from_tuples(
         percentile_rank_df.index, names=["Structure", "Contract"]
     )
+
     return percentile_rank_df
 
 
-# percentile_rank_df= compute_percentile_df(str_data_3d)
-# print(percentile_rank_df)
 
-def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> pd.DataFrame:
-    risk_reward_dict = {}
-    risk_reward_diff_dict = {}
-    roll_down_dict= {}
-    latest_df.index.names = ["Structure", "Contract"] # Ensure proper index naming
-    #print(len(latest_df.index.get_level_values("Structure").unique())) #number of ratios
-    conts_ct= len(latest_df.index.get_level_values("Contract").unique()) # number of contracts
-    for structure in latest_df.index.get_level_values("Structure").unique():
-        structure_df = latest_df.loc[structure] # Extract subset for a structure
-        contracts = structure_df.index.tolist()  # Extract contract list in order (assumes already sorted)
 
-        for i, contract in enumerate(contracts):
-            curr_val = structure_df.loc[contract]["Value"]  #print(i, curr_val)
-            if i == 0:
-                risk_reward_dict[(structure, contract)] = None
-                risk_reward_diff_dict[(structure, contract)] = None
-                roll_down_dict[(structure, contract)] = None
-                continue
-            
-            prev_contract = contracts[i - 1]
-            prev_val = structure_df.loc[prev_contract]["Value"]
 
-            if pd.isna(curr_val) or pd.isna(prev_val): # Handle divide-by-zero, missing values
-                rr = None
-                rrdiff= None
-                roll_dn= None
+def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    # Ensure proper index naming
+    latest_df = latest_df.copy()
+    latest_df.index.names = ["Structure", "Contract"]
 
-            if i== conts_ct-1:
-                risk_reward_dict[(structure, contract)] = None
-                risk_reward_diff_dict[(structure, contract)] = None
-                roll_down_dict[(structure, contract)] = curr_val- prev_val
-                continue
+    # Shift values per Structure
+    latest_df["Prev"] = latest_df.groupby("Structure")["Value"].shift(1)
+    latest_df["Next"] = latest_df.groupby("Structure")["Value"].shift(-1)
 
-            next_contract = contracts[i + 1]
-            next_val = structure_df.loc[next_contract]["Value"]
+    # Roll down = current - prev
+    roll_down = latest_df["Value"] - latest_df["Prev"]
+    # Roll up = current - next
+    roll_up = latest_df["Value"] - latest_df["Next"]
 
-    
-            if pd.isna(next_val):
-                rr = None
-                rrdiff= None
-                roll_dn= curr_val= prev_val
+    # Initialize outputs
+    rr = pd.Series(np.nan, index=latest_df.index, dtype="float64")
+    rrdiff = pd.Series(np.nan, index=latest_df.index, dtype="float64")
+
+    # Valid rows (have both prev & next)
+    mask_valid = latest_df["Prev"].notna() & latest_df["Next"].notna()
+
+    if mask_valid.any():
+        rd = roll_down[mask_valid]
+        ru = roll_up[mask_valid]
+        abs_rd, abs_ru = rd.abs(), ru.abs()
+
+        # Valley
+        is_valley = (rd < 0) & (ru <= 0)
+        rr.loc[is_valley.index[is_valley]] = 99
+        rrdiff.loc[is_valley.index[is_valley]] = np.minimum(abs_rd[is_valley], abs_ru[is_valley])
+
+        # Peak
+        is_peak = (rd > 0) & (ru >= 0)
+        rr.loc[is_peak.index[is_peak]] = -99
+        rrdiff.loc[is_peak.index[is_peak]] = -np.minimum(abs_rd[is_peak], abs_ru[is_peak])
+
+        # Mixed
+        is_mixed = ~(is_valley | is_peak)
+        if is_mixed.any():
+            rd_m, ru_m = rd[is_mixed], ru[is_mixed]
+            abs_rd_m, abs_ru_m = abs_rd[is_mixed], abs_ru[is_mixed]
+
+            # Arrow sign
+            arrow = np.where(
+                abs_rd_m > abs_ru_m,
+                np.where(rd_m > 0, -1, 1),
+                np.where(ru_m > 0, -1, 1),
+            )
+
+            # RR diff
+            diff_val = (abs_rd_m - abs_ru_m).abs() * arrow
+            rrdiff.loc[rd_m.index] = diff_val
+
+            # Risk/reward ratio
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = np.where(
+                    (abs_rd_m == 0) | (abs_ru_m == 0),
+                    99,
+                    np.minimum(99, np.maximum(abs_rd_m, abs_ru_m) / np.minimum(abs_rd_m, abs_ru_m))
+                )
+            rr.loc[rd_m.index] = ratio * arrow
+
+    # Helper to return aligned DataFrames
+    def make_df(series):
+        return pd.DataFrame(series.rename("Value"))
+
+    return (
+        make_df(rr),
+        make_df(rrdiff),
+        make_df(roll_down),
+        make_df(roll_up),
+    )
+
+
+
+def compute_zscore_df(str_data_3d: pd.DataFrame) -> pd.DataFrame:
+    if str_data_3d.empty:
+        return pd.DataFrame(columns=["Value"])
+
+    # Ensure proper index levels
+    str_data_3d = str_data_3d.copy()
+    str_data_3d.index.names = ["Date", "Structure", "Contract"]
+
+    # --- Step 1: find latest date
+    try:
+        latest_date = str_data_3d.index.get_level_values("Date").max()
+    except Exception as e:
+        print(f"[ERROR] Could not extract latest_date: {e}")
+        return pd.DataFrame(columns=["Value"])
+
+    latest_df = str_data_3d.xs(latest_date, level="Date")
+
+    # --- Step 2: compute mean & std per (Structure, Contract)
+    stats = (
+        str_data_3d.groupby(["Structure", "Contract"])["Value"]
+        .agg(["mean", "std"])
+        .rename(columns={"mean": "mu", "std": "sigma"})
+    )
+
+    # --- Step 3: align with latest_df
+    merged = latest_df[["Value"]].join(stats, how="left")
+
+    # --- Step 4: compute z-score safely
+    def safe_zscore(row):
+        val, mu, sigma = row["Value"], row["mu"], row["sigma"]
+        if pd.isna(val) or pd.isna(sigma) or sigma == 0:
+            return np.nan
+        return (val - mu) / sigma
+
+    merged["ZScore"] = merged.apply(safe_zscore, axis=1)
+
+    # --- Step 5: return only ZScore in expected shape
+    zscore_df = merged[["ZScore"]].rename(columns={"ZScore": "Value"})
+    zscore_df.index.names = ["Structure", "Contract"]
+
+    return zscore_df
+
+
+def compute_range_df(str_data_3d):
+    try:
+        # latest date in dataset
+        latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
+        latest_df = str_data_3d.loc[(latest_date)]
+    except Exception as e:
+        print(f"[ERROR] Could not extract latest_date: {e}")
+        return pd.DataFrame(columns=["Value"])
+
+    range_df = {}
+    for (structure, contract), _ in latest_df.iterrows():
+        try:
+            series = (str_data_3d.xs((structure, contract), level=("Structure", "Contract"))["Value"]
+                .dropna())
+
+            if series.empty:
+                rng_val = None
             else:
-                if curr_val- prev_val== 0: # currently rr accord to long str - if mag<1 then can be displayed in 1/rr form with red fill
-                    rr = 98 if next_val > curr_val else -98 if next_val < curr_val else 0
+                s_min, s_max = series.min(), series.max()
+                if pd.isna(s_min) or pd.isna(s_max):
+                    rng_val = None
                 else:
-                    rr= (next_val- curr_val)/  (curr_val- prev_val)
-                rrdiff= (next_val- curr_val) - (curr_val- prev_val)  #concavity f(i−1)+ f(i+1)− 2f(i) # if negative- maxima  if positive then minima
-                roll_dn= curr_val- prev_val
+                    rng_val = s_max - s_min
 
-            # final adjustment            
-            if rr is not None:
-                rr = max(-98, min(98, rr)) # which are tending to infinity
-                if rr<0:
-                    if rrdiff< 0: #maxima
-                        rr= 99 
-                    elif rrdiff> 0: #minima
-                        rr= -99
-            risk_reward_dict[(structure, contract)] = rr
-            risk_reward_diff_dict[(structure, contract)] = rrdiff
-            roll_down_dict[(structure, contract)] = roll_dn
+            range_df[(structure, contract)] = rng_val
 
-    # Convert to DataFrame with same shape and index as latest_df
-    risk_reward_df = pd.DataFrame.from_dict(
-        risk_reward_dict, orient="index", columns=["Value"]
+        except KeyError:
+            range_df[(structure, contract)] = None
+        except Exception as e:
+            print(f"[ERROR] {structure}-{contract}: {e}")
+            range_df[(structure, contract)] = None
+
+    # final DataFrame
+    range_df = pd.DataFrame.from_dict(range_df, orient="index", columns=["Value"])
+    range_df.index = pd.MultiIndex.from_tuples(
+        range_df.index, names=["Structure", "Contract"]
     )
-    risk_reward_df.index = pd.MultiIndex.from_tuples(
-        risk_reward_df.index, names=["Structure", "Contract"]
+    return range_df
+
+
+def classify_regime_in_series(str_data_3d, bb_k=2, window=21):
+    """
+    BB/ATR-based regime classifier for last 21-day series.
+
+    Breakout:
+    Latest value is above the upper Bollinger Band or below the lower band, or
+    Daily move exceeds 2× ATR (volatility spike).
+
+    Trend: If not a breakout, the slope of the 21-day series is non-zero:
+
+    Slope magnitude > threshold → Strong trend
+    Slope magnitude ≤ threshold → Weak trend
+    Direction = Up if slope > 0, Down if slope < 0
+
+    Range: If not a breakout and slope is near zero → classified as Range.
+    """
+    regimes = {}
+
+    try:
+        latest_date = str_data_3d.index.get_level_values("Date").max()
+        latest_df = str_data_3d.loc[latest_date]
+    except Exception as e:
+        print(f"[ERROR] Could not extract latest_date: {e}")
+        return pd.DataFrame(columns=["Value"])
+
+    regime_code_map={
+        "Breakout": "⚡", # "★"
+        "Range": "↔",
+        "Trend_Weak_Up": "↑",
+        "Trend_Weak_Down": "↓",
+        "Trend_Strong_Up": "↑↑",
+        "Trend_Strong_Down": "↓↓",
+    }
+
+    for (structure, contract), _ in latest_df.iterrows():
+        try:
+            # Historical series for this structure/contract
+            series = str_data_3d.xs((structure, contract), level=("Structure", "Contract"))["Value"].dropna()
+
+            if series.empty or len(series) < 2:
+                regimes[(structure, contract)] = None
+                continue
+
+            # Take last `window` points
+            series = series.tail(window)
+
+            # Bollinger Bands
+            mean_val = series.mean()
+            std_val = series.std(ddof=0)
+            upper_bb = mean_val + bb_k * std_val
+            lower_bb = mean_val - bb_k * std_val
+
+            # ATR proxy
+            daily_diff = series.diff().abs()
+            atr = daily_diff.mean()
+
+            # Latest values
+            last_close = series.iloc[-1]
+            prev_close = series.iloc[-2]
+            last_move = abs(last_close - prev_close)
+
+            # Slope
+            x = np.arange(len(series))
+            y = series.values
+            slope, _ = np.polyfit(x, y, 1)
+
+            # Classification
+            if np.isnan(last_close) or np.isnan(upper_bb) or np.isnan(lower_bb) or np.isnan(atr):
+                regime = None
+            elif (last_close > upper_bb) or (last_close < lower_bb) or (last_move > 2 * atr):
+                regime = "Breakout"
+            else:
+                slope_threshold = std_val / len(series) if std_val > 0 else 1e-6
+                if abs(slope) < slope_threshold:
+                    regime = "Range"
+                else:
+                    strength = "Strong" if abs(slope) > 2 * slope_threshold else "Weak"
+                    direction = "Up" if slope > 0 else "Down"
+                    regime = f"Trend_{strength}_{direction}"
+
+            
+            #regimes[(structure, contract)] = regime
+            regimes[(structure, contract)] = regime_code_map.get(regime, np.nan)
+        except KeyError:
+            regimes[(structure, contract)] = None
+        except Exception as e:
+            print(f"[ERROR] {structure}-{contract}: {e}")
+            regimes[(structure, contract)] = None
+
+    # Final DataFrame with column named 'Value' for heatmap compatibility
+    regime_df = pd.DataFrame.from_dict(regimes, orient="index", columns=["Value"])
+    regime_df.index = pd.MultiIndex.from_tuples(
+        regime_df.index, names=["Structure", "Contract"]
     )
 
-    # Convert to DataFrame with same shape and index as latest_df
-    risk_reward_diff_df = pd.DataFrame.from_dict(
-        risk_reward_diff_dict, orient="index", columns=["Value"]
-    )
-    risk_reward_diff_df.index = pd.MultiIndex.from_tuples(
-        risk_reward_diff_df.index, names=["Structure", "Contract"]
-    )
-
-    # Convert to DataFrame with same shape and index as latest_df
-    roll_down_df = pd.DataFrame.from_dict(
-        roll_down_dict, orient="index", columns=["Value"]
-    )
-    roll_down_df.index = pd.MultiIndex.from_tuples(
-        roll_down_df.index, names=["Structure", "Contract"]
-    )
-
-    return risk_reward_df, risk_reward_diff_df, roll_down_df
+    return regime_df
 
 
 
-
-
-# str_data_3d= compute_3d_structure(out_df, structure_names, local_win=21, curve_length=15)
+# str_data_3d= compute_3d_structure(out_df, structure_names, local_win=21, curve_length=20)
 # latest_date = str_data_3d.index.get_level_values("Date").unique()[0]
 # latest_df = str_data_3d.loc[(latest_date)]
 # risk_reward_df, risk_reward_diff_df, roll_down_df = compute_risk_reward_roll_df(latest_df)
@@ -314,106 +505,180 @@ custom_colorscale = [
     [1.0,  'rgb(150, 215, 150)']   # Strong Light Green for 100%
 ]
 
+def generate_heatmap(rounding, layer_df):
+    # Extract unique orders
+    structure_order = layer_df.index.get_level_values('Structure').unique()
+    contract_order = layer_df.index.get_level_values('Contract').unique()
 
+    # Convert MultiIndex Series to 2D DataFrame
+    df_2d = layer_df.unstack(level=0)['Value'].reindex(index=contract_order, columns=structure_order)
 
-def generate_heatmap(rounding, layer_df): #initial value populating
-    structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
-    contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+    # Prepare axes and matrix
+    x_labels = df_2d.columns.tolist()
+    y_labels = df_2d.index[::-1].tolist()  # reverse
+    z = df_2d.values[::-1]                 # reverse rows
 
-    # 2. Convert MultiIndex Series to 2D DataFrame
-    df_2d = layer_df.unstack(level=0)['Value']
-    df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+    # Initialize Heatmap
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=x_labels,
+        y=y_labels,
+        colorscale=custom_colorscale,
+        showscale=False
+    ))
 
-    # 3. Prepare axes labels and data matrix
-    x_labels = df_2d.columns.tolist()              # Structures (x-axis)
-    y_labels = df_2d.index.tolist()[::-1]          # Contracts (y-axis, reversed)
-    z = df_2d.values[::-1]                        # Matrix (rows reversed)
-
-    # 5. Plot using Plotly (no side color panel)
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=z,
-            x=x_labels,
-            y=y_labels,
-            colorscale = custom_colorscale,
-            showscale=False     # Hides the side color panel
-            
-        )
-    )
+    # Layout
     fig.update_layout(
-        # height=500,
-        plot_bgcolor='lightgray',  # inside axes
-        xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
-        yaxis=dict(side='top',showgrid= False, tickfont=dict(size=14, family="Orbitron", color="black")),
+        plot_bgcolor='lightgray',
+        xaxis=dict(side='top', showgrid=False, fixedrange=True,
+                   tickfont=dict(size=14, family="Orbitron", color="black")),
+        yaxis=dict(side='top', showgrid=False, fixedrange=True,
+                   tickfont=dict(size=14, family="Orbitron", color="black")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
-    x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
-    for x_line in x_coordinate_for_line:
-        if x_line < len(x_labels)-1:
-            fig.add_vline(
-                x=x_line,
-                line_width=1.5,
-                line_dash="solid",
-                line_color="white",
-                # annotation_text="Key Event", # Optional: add a label to the line
-                # annotation_position="top right"
-            )
 
-
-   
-
-    y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
-    for y_line in y_coordinate_for_line:
-        if y_line < len(y_labels)-1:
-            fig.add_hline(
-                y= len(y_labels)-y_line,
-                line_width=1.5,
-                line_dash="solid",
-                line_color="white",
-                # annotation_text="Key Event", # Optional: add a label to the line
-                # annotation_position="top right"
-            )
-    
-    vline_segments = [
-        (-0.5, 3.5, 'grey'),
-        (3.5, 7.5, 'red'),
-        (7.5, 11.5, 'green'),
-        (11.5, 15.5, 'blue'),
-        (15.5, 19.5, 'gold'),
-        (19.5, 23.5, 'purple'),
-        (23.5, 27.5, 'orange'),
-        (27.5, 31.5, 'pink'),
-    ]
-    # Add each segment as a separate shape at x = 0
+    # Vertical and horizontal lines
+    x_lines = [0.5, 3.5, 13.5, 23.5, 27.5]
+    y_lines = [4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5]
     y_max = len(y_labels) - 1
+
+    for x in x_lines:
+        if x < len(x_labels) - 1:
+            fig.add_vline(x=x, line_width=1.5, line_dash="solid", line_color="white")
+
+    for y in y_lines:
+        if y < len(y_labels) - 1:
+            fig.add_hline(y=y_max - y, line_width=1.5, line_dash="solid", line_color="white")
+
+    # Colored vertical segments
+    vline_segments = [
+        (-0.5, 3.5, 'grey'), (3.5, 7.5, 'red'), (7.5, 11.5, 'green'),
+        (11.5, 15.5, 'blue'), (15.5, 19.5, 'gold'), (19.5, 23.5, 'purple'),
+        (23.5, 27.5, 'orange'), (27.5, 31.5, 'pink')
+    ]
+
     for y0, y1, color in vline_segments:
-        yf = min(y1, y_max + 0.5)  # allow up to the midpoint after last y-label
         if y0 > y_max + 0.5:
             break
+        yf = min(y1, y_max + 0.5)
         fig.add_shape(
             type='line',
-            x0= -0.5, x1= -0.5,
-            y0= y_max - y0,
-            y1= y_max - yf,
+            x0=-0.5, x1=-0.5,
+            y0=y_max - y0,
+            y1=y_max - yf,
             line=dict(color=color, width=2.5),
             layer='above'
         )
 
-    # 4. annotation text for each cell
-    text = [[f"{val:.{rounding}f}" if not np.isnan(val) else "" for val in row] for row in z]
+    # Annotation text
+    text = [[
+        f"{val:.{rounding}f}" if isinstance(val, (int, float)) and not np.isnan(val)
+        else ("" if val is None or (isinstance(val, float) and np.isnan(val)) else str(val))
+        for val in row
+    ]for row in z]
+
     fig.update_traces(
         text=text,
         texttemplate="%{text}",
-        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
-        # textfont=dict(
-        #    # size=18,  # Set the font size
-        #     family="Orbitron"
-        #  )
+        hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>"
     )
 
-  
     return fig
+
+
+# def generate_heatmap2(rounding, layer_df): #initial value populating
+#     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
+#     contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
+
+#     # 2. Convert MultiIndex Series to 2D DataFrame
+#     df_2d = layer_df.unstack(level=0)['Value']
+#     df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
+
+#     # 3. Prepare axes labels and data matrix
+#     x_labels = df_2d.columns.tolist()              # Structures (x-axis)
+#     y_labels = df_2d.index.tolist()[::-1]          # Contracts (y-axis, reversed)
+#     z = df_2d.values[::-1]                        # Matrix (rows reversed)
+
+#     # 5. Plot using Plotly (no side color panel)
+#     fig = go.Figure(
+#         data=go.Heatmap(
+#             z=z,
+#             x=x_labels,
+#             y=y_labels,
+#             colorscale = custom_colorscale,
+#             showscale=False     # Hides the side color panel
+#         )
+#     )
+#     fig.update_layout(
+#         # height=500,
+#         plot_bgcolor='lightgray',  # inside axes
+#         xaxis=dict(side='top', showgrid=False,fixedrange=True, tickfont=dict(size=14, family="Orbitron", color="black")),
+#         yaxis=dict(side='top',showgrid= False, fixedrange=True, tickfont=dict(size=14, family="Orbitron", color="black")),
+#         height=800,
+#         margin=dict(l=5, r=5, t=5, b=5),
+#     )
+#     x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
+#     for x_line in x_coordinate_for_line:
+#         if x_line < len(x_labels)-1:
+#             fig.add_vline(
+#                 x=x_line,
+#                 line_width=1.5,
+#                 line_dash="solid",
+#                 line_color="white",
+#                 # annotation_text="Key Event", # Optional: add a label to the line
+#                 # annotation_position="top right"
+#             )
+
+#     y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
+#     for y_line in y_coordinate_for_line:
+#         if y_line < len(y_labels)-1:
+#             fig.add_hline(
+#                 y= len(y_labels)-y_line,
+#                 line_width=1.5,
+#                 line_dash="solid",
+#                 line_color="white",
+#                 # annotation_text="Key Event", # Optional: add a label to the line
+#                 # annotation_position="top right"
+#             )
+    
+#     vline_segments = [
+#         (-0.5, 3.5, 'grey'),
+#         (3.5, 7.5, 'red'),
+#         (7.5, 11.5, 'green'),
+#         (11.5, 15.5, 'blue'),
+#         (15.5, 19.5, 'gold'),
+#         (19.5, 23.5, 'purple'),
+#         (23.5, 27.5, 'orange'),
+#         (27.5, 31.5, 'pink'),
+#     ]
+#     # Add each segment as a separate shape at x = 0
+#     y_max = len(y_labels) - 1
+#     for y0, y1, color in vline_segments:
+#         yf = min(y1, y_max + 0.5)  # allow up to the midpoint after last y-label
+#         if y0 > y_max + 0.5:
+#             break
+#         fig.add_shape(
+#             type='line',
+#             x0= -0.5, x1= -0.5,
+#             y0= y_max - y0,
+#             y1= y_max - yf,
+#             line=dict(color=color, width=2.5),
+#             layer='above'
+#         )
+
+#     # 4. annotation text for each cell
+#     text = [[f"{val:.{rounding}f}" if not np.isnan(val) else "" for val in row] for row in z]
+#     fig.update_traces(
+#         text=text,
+#         texttemplate="%{text}",
+#         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
+#         # textfont=dict(
+#         #    # size=18,  # Set the font size
+#         #     family="Orbitron"
+#         #  )
+#     )
+#     return fig
 
 
 def create_blank_heatmap(layer_df):
@@ -560,7 +825,7 @@ def filter_grey (fig, type, layer_df): #initial value populating
 
 ######################################################## hover t3mplate ##########################3
 
-def hovertemplate_heatmap(heatmap, latest_df, risk_reward_df, risk_reward_diff_df, roll_down_df, percentile_df):
+def hovertemplate_heatmap(heatmap, latest_df, roll_down_df, roll_up_df, percentile_df):
     try:
         if not isinstance(latest_df.index, pd.MultiIndex):
             raise ValueError("Input 'fig' must be a Figure with a Heatmap trace at index 0.")
@@ -573,10 +838,9 @@ def hovertemplate_heatmap(heatmap, latest_df, risk_reward_df, risk_reward_diff_d
         processed_dfs = {}
         source_data_map = {
             'Latest': latest_df,
-            'Pct': percentile_df,
-            'R/Rd': risk_reward_diff_df,
-            'R/R': risk_reward_df,
+            'rank': percentile_df,
             'RlDn': roll_down_df,
+            'RlUp': roll_up_df,
         }
         for name, df_series in source_data_map.items():
             if isinstance(df_series, pd.DataFrame):
@@ -742,7 +1006,7 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
 
         # Main Value Display and Sparkline
         dbc.Card(dbc.CardBody([
-            html.H6("Current Value", className="card-subtitle mb-2 text-muted"),
+            html.H6("Current Price", className="card-subtitle mb-2 text-muted"),
             html.H3(f"{latest_val:.2f}" if latest_val is not None else "N/A", className="card-title"),
             dcc.Graph(figure=sparkline_fig, config={'displayModeBar': False}, className="mt-2")
         ])),

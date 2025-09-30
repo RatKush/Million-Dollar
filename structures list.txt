@@ -42,3 +42,7 @@ E6(II)                  | D6 - D6(n+2)                  [1, 0, -4, 0, 6, 0, -4, 
 2X Sn- 1X Sn+1          | 2X S1(n) - 1X S1(n+)   | VIX / VOXX / meet specific           [2, -3, 1]
 2X Sn- 3X Sn+1          | 2X S1(n) - 3X S1(n+1)  | VIX / VOXX / meet specific           [2, -5, 3]
 3X Sn- 2X Sn+1          | 3X S1(n) - 2X S1(n+1)  | VIX / VOXX / meet specific           [3, -5, 2]
+
+
+
+

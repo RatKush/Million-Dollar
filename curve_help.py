@@ -160,7 +160,7 @@ def compute_ratio_matrix(data_dict: dict) -> dict:
     return ratio_matrix
 
 
-def print_matrix(rank_matrix: dict, curve_length=15):
+def print_matrix(rank_matrix: dict, curve_length=20):
     printed_header = False
     for name, df in rank_matrix.items():
         if df.empty:

@@ -1,46 +1,149 @@
 # A Dash app to explore structure curve data: Curve view, chart and KDE analysis
-
 import os
+import time
 import socket
+from typing import Optional, Union, Tuple, Dict, Any
+import logging
 import pandas as pd
+import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State, ctx, callback, no_update
-from flask_caching import Cache
-import dash_bootstrap_components as dbc
-from dash.exceptions import PreventUpdate
-import plotly.graph_objects as go
 from dash.dependencies import ALL
-from typing import Optional
-import time
-# Custom modules
-from str_cal import process_structure, extract_comdty,process_help_calculation, index , get_ratio, fetch_rates_cycle
-from curve_plotter import plot_single_structure, get_button_class, compute_correlation_parameters
-from curve_plotter import generate_curve_plot, cal_sum_of_eases_hikes,cal_sum_of_same_sign_meets, Out_tab2_2 ,S12_tab2_2,L6_tab2_2, add_chart_2_2, plot_chart_2_2,add_chart_2_3, plot_chart_2_3, build_button
-from kde_help import plot_main_kde, classify_cycle, plotted
-from matrix import build_button_tab7, get_button_class_tab7, generate_heatmap, color_heatmap, create_blank_heatmap, compute_3d_structure, compute_percentile_df, compute_risk_reward_roll_df, hovertemplate_heatmap, generate_heatmap_detail_panel, get_adjacent_values, filter_grey
+from dash.exceptions import PreventUpdate
+import dash_bootstrap_components as dbc
+from flask_caching import Cache
+import plotly.graph_objects as go
+import dash_ag_grid as dag
+# 1. THE ENTERPRISE SCRIPT for adding sprakline in table
+external_scripts = ["https://cdn.jsdelivr.net/npm/ag-grid-enterprise/dist/ag-grid-enterprise.min.js"]
+# Data processing and calculations
+from str_cal import (
+    extract_comdty,  process_raw_data, index, get_ratio, fetch_rates_cycle,fn_main_series_only, process_structure_data
+)
+
+# Curve plotting and visualization
+from curve_plotter import (
+    plot_single_structure, get_button_class, compute_correlation_parameters, generate_curve_plot, table_populating_1_2,
+    cal_sum_of_eases_hikes, cal_sum_of_same_sign_meets, Out_tab2_2, S12_tab2_2, 
+    L6_tab2_2, add_chart_2_2, plot_chart_2_2, add_chart_2_3, 
+    plot_chart_2_3, build_button
+)
+
+# KDE analysis
+from kde_help import plot_main_kde, classify_cycle, plotted_sub_KDE
+
+# Matrix and heatmap functionality
+from matrix import (
+    build_button_tab7, get_button_class_tab7, generate_heatmap, color_heatmap,
+    create_blank_heatmap, compute_3d_structure, compute_percentile_df,compute_zscore_df, compute_range_df,classify_regime_in_series,
+    compute_risk_reward_roll_df, hovertemplate_heatmap, generate_heatmap_detail_panel,
+    get_adjacent_values, filter_grey
+)
+
+# UI components
 from footer import footer_component, send_feedback_email
+# dashboard.py (top of file)
+DEFAULT_CURVE_LENGTH = 20
+DEFAULT_LOOKBACK = 250
+DEFAULT_WINDOW = 21
+DEFAULT_OUTLIER_K = 2.5
 
 # ------------------------------------------------
 # UTILITY: Read all available Excel files in local directory
 # ------------------------------------------------
-def get_excel_files(path='.'):
-    return [f for f in os.listdir(path) if f.lower().endswith(('.xlsx', '.xlsm'))]
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+SUPPORTED_EXCEL_EXTENSIONS = ('.xlsx', '.xlsm', '.csv')
+DEFAULT_FILES = ["SR3_ED.xlsm", "SR3.xlsx"]
+def get_excel_files(directory_path: str = '.') -> list[str]:
+    try:
+        if not os.path.exists(directory_path):
+            raise OSError(f"Directory does not exist: {directory_path}")
+
+        if not os.path.isdir(directory_path):
+            raise OSError(f"Path is not a directory: {directory_path}")
+
+        excel_files = [
+            filename for filename in os.listdir(directory_path) 
+            if filename.lower().endswith(SUPPORTED_EXCEL_EXTENSIONS)
+        ]
+
+        return sorted(excel_files)  # Return sorted list for consistency
+
+    except OSError as e:
+        print(f"Error accessing directory {directory_path}: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error in get_excel_files: {e}")
+        return []
+
+def get_default_filename_comdty (available_files: list[str]) -> Optional[str]:
+    if not available_files:
+        return None,None
+
+    # Check for preferred files in order of priority
+    for preferred_file in DEFAULT_FILES:
+        if preferred_file in available_files:
+            com= extract_comdty(preferred_file)
+            return preferred_file, com
+
+    # If no preferred files found, return the first available file
+    return available_files[0], extract_comdty(available_files[0])
 
 
-excel_files = get_excel_files()
-filename_options = [{'label': f, 'value': f} for f in excel_files]
+
 
 # ------------------------------------------------remove_outliers
 # DASH APP INITIALIZATION
 # ------------------------------------------------
-app = dash.Dash(__name__, assets_folder='assets',external_stylesheets=[dbc.themes.CYBORG])
-app.title = "Million Dollar"
-app.config.suppress_callback_exceptions = True# for live
-# Configure the cache 'simple' is for in-memory caching (good for development)
-# For production, consider 'filesystem' or 'redis'
-cache = Cache(app.server, config={
-    'CACHE_TYPE': 'simple' 
-})
+# Application configuration
+APP_CONFIG = {
+    'title': "Million Dollar",
+    'theme': dbc.themes.CYBORG,
+    'assets_folder': 'assets',
+    'suppress_callback_exceptions': True,
+    'cache_type': 'simple'  # Use 'filesystem' or 'redis' for production
+}
+
+
+def initialize_app() -> tuple[dash.Dash, Cache]:
+    """
+    Initialize the Dash application and cache system.
+
+    This function creates and configures the main Dash application instance
+    with proper theme, assets, and caching setup. It separates the initialization
+    logic for better testability and configuration management.
+
+    Returns:
+        tuple[dash.Dash, Cache]: Configured Dash app and cache instances.
+    """
+    # Create Dash application instance
+    app = dash.Dash(
+        __name__, 
+        assets_folder=APP_CONFIG['assets_folder'],
+        external_stylesheets=[APP_CONFIG['theme']],
+        external_scripts=external_scripts
+    )
+
+    # Configure application properties
+    app.title = APP_CONFIG['title']
+    app.config.suppress_callback_exceptions = APP_CONFIG['suppress_callback_exceptions']
+
+    # Initialize cache system
+    # Note: For production, consider using 'filesystem' or 'redis' cache types
+    cache = Cache(app.server, config={
+        'CACHE_TYPE': APP_CONFIG['cache_type']
+    })
+
+    return app, cache
+
+
+# Get available Excel files and setup dropdown options
+excel_files = get_excel_files()
+filename_options = [{'label': filename, 'value': filename} for filename in excel_files]
+default_filename, default_comdty = get_default_filename_comdty(excel_files)
+
+# Initialize Dash application and cache
+app, cache = initialize_app()
 
 
 
@@ -116,14 +219,14 @@ def get_kde_controls():
                 {"label": "± 1σ", "value": "bb1"},
                 {"label": "± 2σ", "value": "bb2"},
             ],
-            value=["Latest", "local_mean", "med", "band68", "band95"],
+            value=["Latest","med", "band68", "band95"],
             switch=True,
             className="px-3 mb-3"
         ),
 
         html.Div([
             html.Label("Local Win", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-local-win-shared", type="number", value=15, min=1, step=2, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
+            dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=2, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
         ], className=" px-3 mb-2 hidden-row", id="kde-local-row"),
 
         html.Div([
@@ -138,8 +241,6 @@ def get_kde_controls():
 
     ], className="control-panel-1")
 
-
-  # Full width inside 2/12 container
 
 
 
@@ -159,31 +260,6 @@ dbc.Container(
 )
 
 ########################################### tab2_2 buttons #################################################
-tab_2_2_2_3_button_ids = [
-    "btn-ease_hike",
-    "btn-nth_out",
-    "btn-mid_out",
-    "btn-1sts12",
-    "btn-nths12",
-    "btn-12ths12",
-    "btn-nthl6",
-    "btn-effr",
-    "btn-2yr",
-    "btn-5yr",
-    "btn-10yr",
-
-     "btn-ease_hike_3twin",
-    "btn-nth_out_3twin",
-    "btn-mid_out_3twin",
-    "btn-1sts12_3twin",
-    "btn-nths12_3twin",
-    "btn-12ths12_3twin",
-    "btn-nthl6_3twin",
-    "btn-effr_3twin",
-    "btn-2yr_3twin",
-    "btn-5yr_3twin",
-    "btn-10yr_3twin",
-]
 default_2_2_2_3 = {
     "btn-ease_hike": True,   # e.g. default ON
     "btn-nth_out": False,
@@ -210,60 +286,43 @@ default_2_2_2_3 = {
     "btn-10yr_3twin": False,
 }
 
+tab_2_2_2_3_button_ids = list(default_2_2_2_3.keys())
 ############################################# tab7  buttons ##############################
-matrix_buttons_price=[
-    "btn-price",
-    "btn-percentile",
-    "btn-riskrewarddiff",
-    "btn-riskreward",
-    "btn-rolldown",
-    "btn-momentum",
-    "btn-rangebound",
-    "btn-oi",
-    "btn-volume",
-]
-matrix_buttons_color= [
-    "btn-price_2",
-    "btn-percentile_2",
-    "btn-rank595_2",
-    "btn-rank1090_2",
-    "btn-riskrewarddiff_2",
-    "btn-riskreward_2",
-    "btn-rolldown_2",
-    "btn-momentum_2",
-    "btn-rangebound_2",
-    "btn-oi_2",
-    "btn-volume_2",
-]
+
 default_tab7 = {
     "btn-price": True,
     "btn-percentile": False,
+    "btn-zscore": False,
     "btn-riskrewarddiff": False,
     "btn-riskreward": False,
     "btn-rolldown": False,
-    "btn-momentum": False,
-    "btn-rangebound": False,
+    "btn-rollup": False,
+    "btn-range": False,
+    "btn-trend": False,
     "btn-oi": False,
     "btn-volume": False,
 
-    "btn-price_2": False,
+    #"btn-price_2": False,
     "btn-percentile_2": True,
     "btn-rank595_2": False,
     "btn-rank1090_2": False,
+    "btn-zscore_2": False,
     "btn-riskrewarddiff_2": False,
     "btn-riskreward_2": False,
     "btn-rolldown_2": False,
-    "btn-momentum_2": False,
-    "btn-rangebound_2": False,
+    "btn-rollup_2": False,
+    "btn-range_2": False,
+    "btn-trend_2": False,
     "btn-oi_2": False,
     "btn-volume_2": False,
 }
 
-
+matrix_buttons_price= [k for k in default_tab7 if not k.endswith("_2")]
+matrix_buttons_color= [k for k in default_tab7 if k.endswith("_2")]
 
 ##################################################### app layout #############################################################
 # ------------------------------------------------
-# DASH LAYOUT
+# DASH LAYOUT  my
 # -----------------------------------------------
 # UI layout
 app.layout = dbc.Container([
@@ -273,7 +332,7 @@ app.layout = dbc.Container([
             dcc.Dropdown(
                 id='filename',
                 options=filename_options,
-                value="SR3_ED.xlsm" if "SR3_ED.xlsm" in excel_files else "SR3.xlsx" if "SR3.xlsx" in excel_files  else excel_files[0] if excel_files else None,
+                value=default_filename,
                 clearable=False,
                 className='form-control'
             )
@@ -281,7 +340,7 @@ app.layout = dbc.Container([
         dbc.Col([
             html.Label("Comdty",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Loading(
-                dcc.Input(id='comdty', type='text', value='', disabled=True, className='form-control'),
+                dcc.Input(id='comdty', type='text', value= default_comdty, disabled=True, className='form-control'),
             type= 'circle'
             )
         ]),
@@ -297,7 +356,7 @@ app.layout = dbc.Container([
         ]),
         dbc.Col([
             html.Label("Curve Length",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='curve_length', type='number', value=15, min= 5,  className='form-control')
+            dcc.Input(id='curve_length', type='number', value=DEFAULT_CURVE_LENGTH, min= 5,  className='form-control')
         ]),
         dbc.Col([
             html.Label("Str Number", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
@@ -305,7 +364,7 @@ app.layout = dbc.Container([
         ]),
         dbc.Col([
             html.Label("Lookback Period", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='lookback_prd', type='number', value=250, min=10, step=10, className='form-control')
+            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=10, className='form-control')
         ]),
         dbc.Col([
             html.Label(" "),
@@ -337,88 +396,120 @@ app.layout = dbc.Container([
             style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
             },
             selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-        children=[
-            dbc.Row([
-                dbc.Col(dcc.Loading(
-                    id="loading-curve",
-                    type="circle",
-                    children=html.Div(dcc.Graph(id='curve-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-1 my-2 rounded")), width=10),
-                dbc.Col([
-    html.Div([
-
-        html.H5(
-            "Plot Controls",
-            style={
-                "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
-                "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
-                "borderBottom": "1px solid #3a3f4b", "margin": "0"
-            }
-        ),
-
-            dbc.Checklist(
-                id='plot-flags',
-                options=[
-                    {"label": "Latest", "value": "Latest"},
-                    {"label": "Settle", "value": "Settle"},
-                    {"label": "Date1", "value": "Date1"},
-                    {"label": "Date2", "value": "Date2"},
-                    {"label": "Moving Average", "value": "MA"},
-                    {"label": "Median", "value": "MED"},
-                    {"label": "Quantile Series", "value": "quant_ser"},
-                    {"label": "Bollinger Band", "value": "BB"},
-                    {"label": "XN", "value": "XN"}
-                ],
-                value=["Latest", "Settle", "XN"],
-                switch=True,
-                className="control-panel-1"
-            ),
-
-            dbc.Stack([
+            },
+            children=[
                 dbc.Row([
-                    dbc.Col(dbc.Label("Local win"), width=6),
-                    dbc.Col(dbc.Input(id="win-local", type="number", value=20, min=1, step=5, debounce=True), width=6)
-                ], id="win-local-row", className="mb-2", style={"display": "none"}),
+                    dbc.Col(dcc.Loading(
+                        id="loading-curve",
+                        type="circle",
+                        children=html.Div(dcc.Graph(id='curve-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-1 my-2 rounded")
+                        ), width=10
+                    ),
+                    dbc.Col([
+                        html.Div([
+                            html.H5(
+                                "Plot Controls",
+                                style={
+                                    "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
+                                    "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
+                                    "borderBottom": "1px solid #3a3f4b", "margin": "0"
+                                }
+                            ),
 
+                            dbc.Checklist(
+                                id='plot-flags',
+                                options=[
+                                    {"label": "Latest", "value": "Latest"},
+                                    {"label": "Settle", "value": "Settle"},
+                                    {"label": "Date1", "value": "Date1"},
+                                    {"label": "Date2", "value": "Date2"},
+                                    {"label": "Mean", "value": "MA"},
+                                    {"label": "Median", "value": "MED"},
+                                    {"label": "Quantile Series", "value": "quant_ser"},
+                                    {"label": "Bollinger Band", "value": "BB"},
+                                    {"label": "XN", "value": "XN"}
+                                ],
+                                value=["Latest", "Settle", "XN"],
+                                switch=True,
+                                className="control-panel-1"
+                            ),
+
+                            dbc.Stack([
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("Local win"), width=6),
+                                    dbc.Col(dbc.Input(id="win-local", type="number", value=21, min=1, step=5, debounce=True), width=6)
+                                ], id="win-local-row", className="mb-2", style={"display": "none"}),
+
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("Settle offset"), width=7),
+                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=5, debounce=True), width=5)
+                                ], id="settle-row", className="mb-2", style={"display": "none"}),
+
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("Date 1"), width=4),
+                                    dbc.Col(dbc.Input(id="date1-input", type="date", value="2025-06-05"), width=8)
+                                ], id="date1-row", className="mb-2", style={"display": "none"}),
+
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("Date 2"), width=4),
+                                    dbc.Col(dbc.Input(id="date2-input", type="date", value="2024-09-25"), width=8)
+                                ], id="date2-row", className="mb-2", style={"display": "none"}),
+
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("Quantile"), width=3),
+                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=5, debounce=True), width=9)
+                                ], id="quantile-row", className="mb-2", style={"display": "none"}),
+
+                                dbc.Row([
+                                    dbc.Col(dbc.Label("BB Std Dev"), width=6),
+                                    dbc.Col(dbc.Input(id="bb-std-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
+                                ], id="bb-std-row", className="mb-2", style={"display": "none"}),
+
+                            ], gap=1)
+                        ],
+
+                        style={
+                            "border": "1px solid #3a3f4b",
+                            "borderRadius": "8px",
+                            "backgroundColor": "#2b2e35",
+                            "padding": "10px",
+                            "marginTop": "5px"
+                        })
+                    ], width=2, style={"paddingLeft": "0px", "marginTop": "2px"})
+                ]),
+            #]),
+                # --- NEW ROW 2: SORTABLE TABLE ---  ###### table ############################################
                 dbc.Row([
-                    dbc.Col(dbc.Label("Settle offset"), width=7),
-                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=10, min=1, step=5, debounce=True), width=5)
-                ], id="settle-row", className="mb-2", style={"display": "none"}),
+                    dbc.Col(dcc.Loading(
+                        id="loading-table",
+                        type="circle",
+                        children=html.Div(  # <-- Wrap AgGrid
+                            dag.AgGrid(
+                                id='contracts-table',
+                                className="ag-theme-alpine-dark top-scroll",
+                                columnDefs=[],            # set columns later
+                                rowData=[],               # will be provided by callback
+                                defaultColDef={"sortable": True, "resizable": True, "filter": True},
+                                columnSize="autoSize", # "sizeToFit", "autoSize", "responsiveSizeToFit", 
+                                dashGridOptions={"pagination": False, "domLayout": "autoHeight" },  # 👈 makes grid height fit content
+                                enableEnterpriseModules=True,#sparline
+                                style={"width": "100%"},  # or use a maxHeight with scroll
+                                
+                            ),
+                        style={"overflow": "hidden", "position": "relative"}  # container style
+                        )
+                    ), width=12)
+                ], className="my-2"), # Add some margin
+                # dbc.Row([
+                #     dbc.Col(dbc.Button("Load more", id="btn-more", color="secondary", size="sm", className="me-2"), width="auto"),
+                #     dbc.Col(dbc.Button("Show all", id="btn-all", color="primary", size="sm", className="me-2"), width="auto"),
+                #     dbc.Col(dbc.Button("Collapse", id="btn-collapse", color="dark", size="sm"), width="auto"),
+                # ], className="my-2")
+            
+            ]),
 
-                dbc.Row([
-                    dbc.Col(dbc.Label("Date 1"), width=4),
-                    dbc.Col(dbc.Input(id="date1-input", type="date", value="2025-06-05"), width=8)
-                ], id="date1-row", className="mb-2", style={"display": "none"}),
-
-                dbc.Row([
-                    dbc.Col(dbc.Label("Date 2"), width=4),
-                    dbc.Col(dbc.Input(id="date2-input", type="date", value="2024-09-25"), width=8)
-                ], id="date2-row", className="mb-2", style={"display": "none"}),
-
-                dbc.Row([
-                    dbc.Col(dbc.Label("Quantile"), width=3),
-                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=5, debounce=True), width=9)
-                ], id="quantile-row", className="mb-2", style={"display": "none"}),
-
-                dbc.Row([
-                    dbc.Col(dbc.Label("BB Std Dev"), width=6),
-                    dbc.Col(dbc.Input(id="bb-std-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
-                ], id="bb-std-row", className="mb-2", style={"display": "none"}),
-
-            ], gap=1)
-
-        ],
-        style={
-            "border": "1px solid #3a3f4b",
-            "borderRadius": "8px",
-            "backgroundColor": "#2b2e35",
-            "padding": "10px",
-            "marginTop": "5px"
-        })
-    ], width=2, style={"paddingLeft": "0px", "marginTop": "2px"})
-
-            ])
-        ]),
+      
+        
 
 ############################################################# tab 7 ################################################################        
   
@@ -513,7 +604,7 @@ app.layout = dbc.Container([
                                 dcc.Dropdown(
                                     id='dropdown-ratio',
                                     options=[{'label': s, 'value': s} for s in index],
-                                    value=index[0:27],
+                                    value= index[0:27],
                                     multi=True,
                                     clearable=False,
                                     style={"width": "100%","maxHeight": "120px", "overflowY": "auto", "fontSize": "10px", "background-color": "#2b2e35", "color": "#ffffff"}  
@@ -533,7 +624,7 @@ app.layout = dbc.Container([
                             html.Div([
                                 html.Label("Curve Length", className="form-label", style={"width": "68%", "marginBottom": 0}),
                                 dcc.Input(
-                                    id="input-curve-length", type="number", min=4, value=15,
+                                    id="input-curve-length", type="number", min=4, value=DEFAULT_CURVE_LENGTH,
                                     debounce=False, placeholder="#", className="form-control form-control-sm",
                                     style={"width": "32%"}
                                 )
@@ -566,11 +657,13 @@ app.layout = dbc.Container([
                                 dbc.ButtonGroup([
                                     build_button_tab7("Price", id="btn-price", active=default_tab7["btn-price"]),
                                     build_button_tab7("Percentile", id="btn-percentile", active=default_tab7["btn-percentile"]),
+                                    build_button_tab7("Z Score", id="btn-zscore", active=default_tab7["btn-zscore"]),
                                     build_button_tab7("RRd diff", id="btn-riskrewarddiff", active=default_tab7["btn-riskrewarddiff"]),
                                     build_button_tab7("Risk/ Reward", id="btn-riskreward", active=default_tab7["btn-riskreward"]),
                                     build_button_tab7("Roll down", id="btn-rolldown", active=default_tab7["btn-rolldown"]),
-                                    build_button_tab7("Momentum", id="btn-momentum", active=default_tab7["btn-momentum"]),
-                                    build_button_tab7("Range bound", id="btn-rangebound", active=default_tab7["btn-rangebound"]),
+                                    build_button_tab7("Roll up", id="btn-rollup", active=default_tab7["btn-rollup"]),
+                                    build_button_tab7("Range", id="btn-range", active=default_tab7["btn-range"]),
+                                    build_button_tab7("Trend", id="btn-trend", active=default_tab7["btn-trend"]),
                                     build_button_tab7("OI", id="btn-oi", active=default_tab7["btn-oi"]),
                                     build_button_tab7("Volume", id="btn-volume", active=default_tab7["btn-volume"]),
                                 ], vertical=True, className="mb-3 w-100", style={"padding": "10px 4px 6px 12px"})
@@ -591,15 +684,17 @@ app.layout = dbc.Container([
                                 ),
                                 # The duplicated button group with new, unique IDs.
                                 dbc.ButtonGroup([
-                                    build_button_tab7("Price", id="btn-price_2", active=default_tab7["btn-price_2"]),
+                                    #build_button_tab7("Price", id="btn-price_2", active=default_tab7["btn-price_2"]),
                                     build_button_tab7("Percentile", id="btn-percentile_2", active=default_tab7["btn-percentile_2"]),
                                     build_button_tab7("≤ 5 or ≥ 95", id="btn-rank595_2", active=default_tab7["btn-rank595_2"]),
                                     build_button_tab7("≤ 10 or ≥ 90", id="btn-rank1090_2", active=default_tab7["btn-rank1090_2"]),
+                                    build_button_tab7("Z Score", id="btn-zscore_2", active=default_tab7["btn-zscore_2"]),
                                     build_button_tab7("RRd diff", id="btn-riskrewarddiff_2", active=default_tab7["btn-riskrewarddiff_2"]),
                                     build_button_tab7("Risk/ Reward", id="btn-riskreward_2", active=default_tab7["btn-riskreward_2"]),
                                     build_button_tab7("Roll down", id="btn-rolldown_2", active=default_tab7["btn-rolldown_2"]),
-                                    build_button_tab7("Momentum", id="btn-momentum_2", active=default_tab7["btn-momentum_2"]),
-                                    build_button_tab7("Range bound", id="btn-rangebound_2", active=default_tab7["btn-rangebound_2"]),
+                                    build_button_tab7("Roll up", id="btn-rollup_2", active=default_tab7["btn-rollup_2"]),
+                                    build_button_tab7("Range", id="btn-range_2", active=default_tab7["btn-range_2"]),
+                                    build_button_tab7("Trend", id="btn-trend_2", active=default_tab7["btn-trend_2"]),
                                     build_button_tab7("OI", id="btn-oi_2", active=default_tab7["btn-oi_2"]),
                                     build_button_tab7("Volume", id="btn-volume_2", active=default_tab7["btn-volume_2"]),
                                 ], vertical=True, className="mb-3 w-100", style={"padding": "10px 12px 6px 4px"})
@@ -850,16 +945,17 @@ footer_component,
 
 
 
-
-    dcc.Store(id='stored-data', storage_type='local' ),#persistence=True
-    dcc.Store(id='cycle-store',storage_type='local' )#persistence=True
-    #html.Div(id='output-area', className='border p-3 my-2')
+    dcc.Store(id='raw-data-store', storage_type='session'),
+    dcc.Store(id='general-store', data=[default_comdty, "L6", 8, DEFAULT_LOOKBACK], storage_type='session'),
+    dcc.Store(id='structure-data-store', storage_type='session'),
+    dcc.Store(id='final-mainseriesonly-store', storage_type='session'),
+    dcc.Store(id='cycle-store',storage_type='session' )#persistence=Tru
 
 
 ], fluid=True)  # ← close Container here
 
 
-#
+###############################################################################################################
 
       # separator before footer
 
@@ -871,50 +967,140 @@ footer_component,
 
 ################################################################ #########################################################
 # ---------------------------------------------------------------------------------------------------
-# CALLBACK: Load & Process Structure Data tab 1
+# CALLBACK: Load & Process raw data (outright) and Structure Data df and interested Series
 # ------------------------------------------------------------------------------------------------------
-@app.callback(
-    Output('stored-data', 'data'),
-    Output('comdty', 'value'),
-    Input('filename', 'value'),
-    Input('str_name', 'value'),
-    Input('curve_length', 'value'),
-    Input('str_number', 'value'),
-    Input('lookback_prd', 'value')
-)
-def store_data(filename, str_name, curve_length, str_number, lookback_prd):
+def serialize_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
+    """Convert a pandas DataFrame to JSON-serializable dictionary - CORRECTED"""
+    if df is None or df.empty:
+        return {"data": [], "index": [], "columns": []}
+    
+    # Ensure index is serializable
     try:
-        comdty = extract_comdty(filename)
+        index_serialized = df.index.astype(str).tolist()
+    except:
+        index_serialized = list(range(len(df)))
+    
+    return {
+        "data": df.values.tolist(),
+        "index": index_serialized,
+        "columns": df.columns.tolist()
+    }
 
-        out_df, str_df, series, comdty, str_name, str_number = process_structure(
-            filepath=filename,
-            str_name=str_name,
-            str_number=int(str_number),
-            lookback_prd=int(lookback_prd),
-            curve_length=int(curve_length)
+
+def serialize_series(series: pd.Series) -> Dict[str, Any]:
+    """Convert a pandas Series to JSON-serializable dictionary - CORRECTED"""
+    if series is None or series.empty:
+        return {"values": [], "index": []}
+    
+    # Ensure index is serializable
+    try:
+        index_serialized = series.index.astype(str).tolist()
+    except:
+        index_serialized = list(range(len(series)))
+    
+    return {
+        "values": series.values.tolist(),
+        "index": index_serialized
+    }
+
+@callback(
+    Output('general-store', 'data'),
+    [Input('filename', 'value'),
+    Input('str_name', 'value'),
+    Input('str_number', 'value'),
+    Input('lookback_prd', 'value')])
+def general_info(filename, str_name, str_num, lookback_prd):
+    if not filename or not str_name or not  str_num or not  lookback_prd :
+        raise PreventUpdate # don’t update store if no file chosen
+
+    comdty = extract_comdty(filename)
+    str_name = str(str_name).strip().upper() if str_name else None
+    str_num = int(str_num) if str_num and str(str_num).isdigit() else None
+    lookback_prd = int(lookback_prd) if lookback_prd and str(lookback_prd).isdigit() else None
+
+    # Return as list (JSON serializable)
+    return [comdty, str_name, str_num, lookback_prd]
+
+
+#populatinty comodity 
+@callback(
+    Output('comdty', 'value'),
+    Input('general-store', 'data')
+)
+def update_comdty_input(general_data: list) -> str:
+    """Updates the commodity input field based on the stored commodity data."""
+    if not general_data or len(general_data) < 1:
+        return ""
+    return str(general_data[0])   # first element = comdty
+
+@callback(
+    Output('raw-data-store', 'data'),
+    [Input('filename', 'value'),
+     Input('lookback_prd', 'value')],
+)
+def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, Any]:
+    """CORRECTED: Extract raw data callback - simplified validation"""
+    # Basic validation - return empty if invalid inputs
+    if not filename or not lookback_prd:
+        raise PreventUpdate
+    
+    try:
+        lookback_prd_int = int(lookback_prd)
+        if lookback_prd_int <= 0:
+            return {}
+        
+        # Load and process data - FIXED: now returns tuple
+        raw_df = process_raw_data(filepath=filename, lookback_prd=lookback_prd_int)
+        if raw_df.empty:
+            return {}
+        
+        # Serialize the raw data for storage
+        serialized_raw_data = serialize_dataframe(raw_df)
+        return serialized_raw_data
+        
+    except Exception as e:
+        logging.error(f"Error in extract_raw_data_callback for file {filename}: {e}")
+        return {}
+
+
+
+
+############################ ONLY MAIN SERIES cal ######################################################################
+@callback(
+    Output('final-mainseriesonly-store', 'data'),
+    [Input('raw-data-store', 'data'),
+    State('general-store', 'data'),
+    Input('str_name', 'value'),
+    Input('str_number', 'value'),
+    Input('lookback_prd', 'value')],
+)
+def compute_main_series_only(raw_data_dict: Dict[str, Any], general_store, str_name, str_number, lookback_prd):
+    if not raw_data_dict or not str_name or not general_store or not str_number or not lookback_prd:
+        raise PreventUpdate
+    
+    try:
+        if not raw_data_dict.get('data'):
+            return {}
+        
+        raw_df = pd.DataFrame(
+            data=raw_data_dict['data'],
+            index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+            columns=raw_data_dict.get('columns', None)
         )
-        return {
-            "out_df": {
-                "data": out_df.values.tolist(),
-                "index": out_df.index.astype(str).tolist(),
-                "columns": out_df.columns.tolist()
-            },
-            "str_df": {
-                "data": str_df.values.tolist(),
-                "index": str_df.index.astype(str).tolist(),
-                "columns": str_df.columns.tolist()
-            },
-            "series": {
-                "values": list(series),
-                "index": series.index.astype(str).tolist()
-            },
-            "comdty": comdty,
-            "str_name": str_name,
-            "str_number": str_number,
-            "lookback_prd": lookback_prd
-        }, comdty
-    except Exception:
-        return {}, ""
+        if raw_df.empty:
+            return {}
+        str_number_int = int(str_number)
+        lookback_int = int(lookback_prd)
+        return serialize_series( fn_main_series_only(raw_df,str_name,str_number_int, general_store[0],lookback_int))
+        
+    except Exception as e:
+        print(f"Error in compute_main_series_only_callback: {e}")
+        return {}
+
+
+
+
+
 
 # ------------------------------------------------------------------------------------------------------------------
 # CALLBACK: Toggle Visibility of Curve Controls tab 1
@@ -938,12 +1124,67 @@ def toggle_input_visibility(active_flags):
     ]
 
 
-# ------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
 # CALLBACK: Curve Plot for Tab 1
-# ------------------------------------------------
+# -----------------------------------------------------------------------------------------------------
+
+########### str_df store #################
+@app.callback(
+    Output('structure-data-store', 'data'),
+    Input('raw-data-store', 'data'),
+    Input('win-local', 'value'),
+    Input('str_name', 'value'),
+    State('general-store', 'data'),
+)
+def store_str_df_dcc_(raw_data_dict, win_local,str_name,  general_store):
+    if  not raw_data_dict or not raw_data_dict.get('data') :
+        raise PreventUpdate
+
+    inputs = [win_local]
+    if any(x is None for x in inputs):
+        raise PreventUpdate
+
+    try:
+        raw_df = pd.DataFrame(
+            data=raw_data_dict['data'],
+            index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+            columns=raw_data_dict.get('columns', None)
+        )
+        if raw_df.empty:
+            raise PreventUpdate
+
+        local_win_for_str_df= min(win_local+ 21, raw_df.shape[0])
+        sub_df = raw_df.iloc[:local_win_for_str_df, :]
+        if not raw_df.empty:
+            first_row_key = tuple(raw_df.iloc[0].values)
+        else:
+            first_row_key = "empty"
+
+        # Cache key = index hash + first row + other params
+        cache_key = f"str_df:{hash(tuple(raw_df.index))}:{first_row_key}:{general_store[0]}:{win_local}:{str_name}"
+        str_df = cache.get(cache_key)
+        
+        if str_df is None:
+            str_df = process_structure_data(sub_df,general_store[0],win_local,str_name)
+            cache.set(cache_key, str_df)
+
+        if str_df.empty:
+            raise PreventUpdate
+        return serialize_dataframe(str_df)
+    except Exception as e:
+        print(f"Error in computing str_df from raw_df: {e}")
+        return {}
+    
+
+
+
+
 @app.callback(
     Output('curve-plot', 'figure'),
-    Input('stored-data', 'data'),
+    Input('raw-data-store', 'data'),
+    Input('curve_length', 'value'),
+    Input('str_name', 'value'),
+    State('general-store', 'data'),
     Input('plot-flags', 'value'),
     Input('Settle_days-input', 'value'),
     Input('date1-input', 'value'),
@@ -951,52 +1192,167 @@ def toggle_input_visibility(active_flags):
     Input('win-local', 'value'),
     Input('quantile-input', 'value'),
     Input('bb-std-input', 'value'),
-    prevent_initial_call=False
 )
-def update_curve_plot(stored, active_flags, Settle_days, date1, date2, win_local, quantile, bb_std):
-    if not stored:
-        return warning_plot("Series data not availbale (no stored data)")
+def update_curve_plot(raw_data_dict,  curve_len, str_name, general_store, active_flags, Settle_days, date1, date2, win_local, quantile, bb_std):
+    if  not raw_data_dict or not raw_data_dict.get('data') :
+        return warning_plot("⚠ No structure data available")
 
-    str_df = pd.DataFrame( 
-        data=stored["str_df"]["data"],
-        index=pd.to_datetime(stored["str_df"]["index"]),
-        columns=stored["str_df"]["columns"]
-    )
+    inputs = [curve_len, Settle_days, date1, date2, win_local, quantile, bb_std]
+    if any(x is None for x in inputs):
+        raise PreventUpdate
 
-    plot_flags = {key: key in active_flags for key in ["Latest", "Settle", "Date1", "Date2", "MA", "MED", "quant_ser", "BB", "XN"]}
-    #print(plot_flags["Date1"],date1, "d1", date2, "d2", plot_flags["Date2"])
-    return generate_curve_plot(
-        str_df=str_df,
-        plot_title=f"{stored['comdty']}{stored['str_name']}",
-        plot_flags=plot_flags,
-        Settle=Settle_days if plot_flags["Settle"] else None,
-        date1=date1 if plot_flags["Date1"] else None,
-        date2=date2 if plot_flags["Date2"] else None,
-        win_local=win_local,
-        quantile=quantile if plot_flags["quant_ser"] else None,
-        bb_std=bb_std if plot_flags["BB"] else None
-    )
+    try:
+        raw_df = pd.DataFrame(
+            data=raw_data_dict['data'],
+            index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+            columns=raw_data_dict.get('columns', None)
+        )
+        if raw_df.empty:
+            warning_plot("⚠ raw data empty after reconstruction")
+        #print(raw_df.head())
+        #raw_data,  comdty, local_win, str_name)
+        local_win_for_str_df= min(win_local+ 21, raw_df.shape[0])
+        #str_df= process_structure_data(raw_df.iloc[:local_win_for_str_df,:], general_store[0] , win_local,  general_store[1])
+        # ---- Simple global cache ----
+        sub_df = raw_df.iloc[:local_win_for_str_df, :]
+                # Pick first row values as tuple (safe even if only one column)
+        if not raw_df.empty:
+            first_row_key = tuple(raw_df.iloc[0].values)
+        else:
+            first_row_key = "empty"
 
-# --------------------------------------------------------------------------------------------------------------------------------------
-# CALLBACK: Single Structure Plot (Tab 2)
-# ---------------------------------------------------------------------------------------------------------------------------------------
+        # Cache key = index hash + first row + other params
+        cache_key = f"str_df:{hash(tuple(raw_df.index))}:{first_row_key}:{general_store[0]}:{win_local}:{str_name}"
+        str_df = cache.get(cache_key)
+        
+        if str_df is None:
+            str_df = process_structure_data(sub_df,general_store[0],win_local,str_name)
+            cache.set(cache_key, str_df)
+
+        if str_df.empty:
+            return warning_plot("⚠ Structure data empty after reconstruction")
+
+        try:
+            n = int(curve_len)
+            if n <= 0:
+                n = DEFAULT_CURVE_LENGTH
+        except:
+            n = DEFAULT_CURVE_LENGTH
+        str_df = str_df.iloc[:, :min(n, str_df.shape[1])]
+
+        
+        # ✅ Normalize flags
+        required_flags = ["Latest", "Settle", "Date1", "Date2", "MA", "MED", "quant_ser", "BB", "XN"]
+        plot_flags = {key: key in (active_flags or []) for key in required_flags}
+
+        # ✅ Convert dates safely
+        date1 = pd.to_datetime(date1, errors="coerce", format='mixed') if plot_flags["Date1"] else None
+        date2 = pd.to_datetime(date2, errors="coerce", format='mixed') if plot_flags["Date2"] else None
+
+        #print(str_df.head())
+        return generate_curve_plot(
+            str_df=str_df,
+            raw_df= raw_df,
+            plot_flags=plot_flags,
+            comdty= general_store[0],
+            curve_len= curve_len,
+            str_name= str_name,
+            Settle=Settle_days if plot_flags["Settle"] else None,
+            date1=date1,
+            date2=date2,
+            win_local=int(win_local) if win_local else 21,
+            quantile=float(quantile) if plot_flags["quant_ser"] else None,
+            bb_std=float(bb_std) if plot_flags["BB"] else None,
+        )
+
+    except Exception as e:
+        logging.exception("update_curve_plot failed")
+        return warning_plot(f"⚠ Failed to generate plot: {e}")
+
+
+# # --------------------------------------------------------------------------------------------------------------------------------------
+# # CALLBACK: table (Tab 1.2)
+# # ---------------------------------------------------------------------------------------------------------------------------------------
+@app.callback(
+    Output('contracts-table', 'rowData'),
+    Output('contracts-table', 'columnDefs'),
+    Input('structure-data-store', 'data'),
+    Input('curve_length', 'value'),
+    Input('str_name', 'value'),
+    Input('str_number', 'value'),
+    Input('win-local', 'value'),
+    State('general-store', 'data'),
+)
+def table_1_2_callback(str_data, curve_len,str_name, str_number,  win_local, general):
+    # 2. DESERIALIZE DATA: Convert the stored dictionary back into a DataFrame
+    try:
+         # --- 1. Handle initial state ---
+        if not str_data or "data" not in str_data:
+            return [], []
+
+        # --- 2. Deserialize into DataFrame safely ---
+        try:
+            df = pd.DataFrame(
+                data=str_data.get("data", []),
+                index=pd.to_datetime(str_data.get("index", []), errors="coerce"),
+                columns=str_data.get("columns", []),
+            )
+        except Exception as e:
+            logging.warning(f"Failed to deserialize str_data into DataFrame: {e}")
+            return [], []
+        if df.empty:
+            return [], []
+       
+        # --- 3. Parameters ---
+        try:
+            change_period = int(win_local) if win_local and int(win_local) > 0 else 1
+        except Exception:
+            change_period = 1
+
+        try:
+            curve_len_final = int(curve_len) if curve_len and int(curve_len) > 0 else DEFAULT_CURVE_LENGTH
+        except Exception:
+            curve_len_final = DEFAULT_CURVE_LENGTH
+
+        return table_populating_1_2(df, change_period, curve_len_final, str_name)
+
+
+    except Exception as e:
+        logging.exception("table populating failed")
+        return [], []
+
+
+
+
+# # --------------------------------------------------------------------------------------------------------------------------------------
+# # CALLBACK: Single Structure Plot (Tab 2)
+# # ---------------------------------------------------------------------------------------------------------------------------------------
 
 @app.callback(
     Output('chart-plot', 'figure'),
-    Input('stored-data', 'data'),
+    Input('final-mainseriesonly-store', 'data'),
+    State('general-store', 'data'),
     prevent_initial_call=True
 )
-def update_chart_tab(stored):
-    if not stored:
-        return warning_plot("Series data not availbale (no stored data)")
-    
-    s = stored['series']
-    series = pd.Series(data=s['values'], index=pd.to_datetime(s['index']))
-    #print(series.head())
-    str_name = f"{stored['comdty']}{stored['str_name']}({stored['str_number']})"
-    return plot_single_structure(series, str_name)
+def update_chart_tab(stored: Dict[str, Any], general) -> Any:
+    """Rebuild Series and return plot."""
+    if not stored or "values" not in stored or "index" not in stored:
+        return warning_plot("⚠️ Series data not available")
 
-##################### tab 2_2 #############################################################################
+    try:
+        series = pd.Series(
+        data=stored["values"],
+        index=pd.to_datetime(stored["index"], errors="coerce")
+        )
+        str_name = f"{general[0]}{general[1]}({general[2]})"
+        return plot_single_structure(series, str_name)
+
+    except Exception as e:
+        print(f"[update_chart_tab] Error: {e}")
+        return warning_plot("⚠️ Failed to plot series")
+
+# ##################### tab 2_2 #############################################################################
+# ########################################### tab_2_3 ################################################
 
 @app.callback(
     Output("tab_2_2_2_3_toggle-store", "data"),
@@ -1029,72 +1385,82 @@ def update_classnames(store):
 
 
 @app.callback(
-    Output('sum-of-eases-plot', 'figure'),
-    Input('stored-data', 'data'),
-    Input('tab_2_2_2_3_toggle-store', 'data'),
-    Input('tabs', 'value'), # Optional
+    [Output('sum-of-eases-plot', 'figure'),
+    Output('scatter_plot_2_3', 'figure')],
+    [Input('raw-data-store', 'data'),
+    State('general-store', 'data'),
+    Input('final-mainseriesonly-store', 'data'),## tab2_1 series for corr
+    Input('tab_2_2_2_3_toggle-store', 'data')],
     prevent_initial_call=True
 )
-
-def update_tab_2_2(stored: Optional[dict], toggle_store: dict, tab: Optional[str]):
-    if not stored:
-        return warning_plot("⚠ Series data not available (no stored data)")
-
-    # --- Initial Data Setup ---
-    comdty = stored["comdty"]
-    out_df = pd.DataFrame(
-        data=stored["out_df"]["data"],
-        index=pd.to_datetime(stored["out_df"]["index"]),
-        columns=stored["out_df"]["columns"]
+def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Dict[str, Any], toggle_store: dict):
+    # Basic validation
+    if not raw_data_dict or not raw_data_dict.get('data'):
+        return warning_plot("no raw data dict found update_tab_2_2 "), warning_plot("no raw data dict found update_tab_2_3 ")
+    
+    raw_df = pd.DataFrame(
+        data=raw_data_dict['data'],
+        index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+        columns=raw_data_dict.get('columns', None)
     )
-    lookback_prd = stored["lookback_prd"]
+    
+    if raw_df.empty:
+        return  warning_plot("no raw data found update_tab_2_2 "), warning_plot("no raw data found update_tab_2_3 ")
+        
+    comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
     fig2_2 = plot_chart_2_2()
-
+    fig2_3 = plot_chart_2_3()
     # Early exit if no buttons are toggled
     if not any(toggle_store.get(btn) for btn in tab_2_2_2_3_button_ids):
-        return warning_plot("⚠ No series selected")
+        return warning_plot("⚠ No series selected"), warning_plot("⚠ No series selected")
 
-    chart2_1_series = pd.Series(
-        data=stored['series']['values'],
-        index=pd.to_datetime(stored['series']['index'])
-    )
+    """Rebuild main Series for corr"""
+    if not main_series or "values" not in main_series or "index" not in main_series:
+        chart2_1_series= None
+
+    else:
+        chart2_1_series = pd.Series(
+            data=main_series["values"],
+            index=pd.to_datetime(main_series["index"], errors="coerce")
+        )
 
     # --- Trace Generation Configuration ---
     # Define a configuration map for most traces to reduce repetitive if-blocks
+    
     trace_config = {
         "btn-nth_out": {
             "func": Out_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
+            "args": (raw_df,comdty, str_num, lookback_prd),
             "legend": "nth Out",
             "color": "#f58231" # Orange
         },
         "btn-mid_out": {
             "func": Out_tab2_2,
-            "args": (out_df, stored['str_number'] + int(len(get_ratio(stored['str_name'])) / 2), lookback_prd),
+            "args": (raw_df, comdty, str_num + int(len(get_ratio(str_name)) / 2), lookback_prd),
             "legend": "Mid Out",
             "color": "#ffe119" # Bright Yellow
         },
         "btn-1sts12": {
             "func": S12_tab2_2,
-            "args": (out_df, 1, lookback_prd),
+            "args": (raw_df, 1, lookback_prd),
             "legend": "1st S12",
-            "color": "#46f0f0" # Cyan
+            "color": "#006666" # Cyan
         },
         "btn-nths12": {
             "func": S12_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
+            "args": (raw_df, str_num, lookback_prd),
             "legend": "nth S12",
             "color": "#3cb44b" # Strong Green
         },
         "btn-12ths12": {
             "func": S12_tab2_2,
-            "args": (out_df, 12, lookback_prd),
+            "args": (raw_df, 12, lookback_prd),
             "legend": "12th S12",
             "color": "#f032e6" # Magenta
         },
         "btn-nthl6": {
             "func": L6_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
+            "args": (raw_df, str_num, lookback_prd),
             "legend": "nth L6",
             "color": "rgb(152,78,163)"
         }
@@ -1105,12 +1471,13 @@ def update_tab_2_2(stored: Optional[dict], toggle_store: dict, tab: Optional[str
     # 1. Sum of eases/hikes
     if toggle_store.get("btn-ease_hike"):
         if comdty == "meets":
-            series_data = cal_sum_of_same_sign_meets(out_df, comdty, lookback_prd)
-        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA"}:
-            series_data = cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
+            series_data = cal_sum_of_same_sign_meets(raw_df, comdty, lookback_prd)
+        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ESTR"}:
+            series_data = cal_sum_of_eases_hikes(raw_df, comdty, lookback_prd)
         else:
             series_data = pd.Series(dtype='float64')
         
+        add_chart_2_3(fig2_3, chart2_1_series, series_data, legend="sum of eases/ hikes", color="#4363d8")
         corr = compute_correlation_parameters(chart2_1_series, series_data)
         add_chart_2_2(fig2_2, series_data, corr, legend="sum of eases/ hikes", color="#4363d8")
 
@@ -1121,14 +1488,15 @@ def update_tab_2_2(stored: Optional[dict], toggle_store: dict, tab: Optional[str
         
         treasury_map = {
             "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "black"},
-            "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#e6beff"},
-            "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#bcf60c"},
-            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#fabebe"}
+            "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#5c2791"},
+            "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#7a9900"},
+            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#b04141"}
         }
 
         for btn, params in treasury_map.items():
             if toggle_store.get(btn):
                 series_data = df_rates.loc[params["label"]]
+                add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=params["legend"], color=params["color"])
                 if btn == "btn-effr":
                     # Special correlation case for EFFR
                     corr = {'mean_rolling_correlation': None, 'distance_correlation': None}
@@ -1140,130 +1508,24 @@ def update_tab_2_2(stored: Optional[dict], toggle_store: dict, tab: Optional[str
     for btn, config in trace_config.items():
         if toggle_store.get(btn):
             series_data = config["func"](*config["args"])
+            add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=config["legend"], color=config["color"])
             corr = compute_correlation_parameters(chart2_1_series, series_data)
             add_chart_2_2(fig2_2, series_data, corr, legend=config["legend"], color=config["color"])
 
-    return fig2_2
-
-
-########################################### tab_2_3 ################################################
-@app.callback(
-    Output('scatter_plot_2_3', 'figure'),
-    Input('stored-data', 'data'),
-    Input('tab_2_2_2_3_toggle-store', 'data'),
-    Input('tabs', 'value'), # Optional
-    prevent_initial_call=True
-)
-def update_tab_2_3(stored: Optional[dict], toggle_store: dict, tab: Optional[str]):
-    if not stored:
-        return warning_plot("⚠ Series data not available (no stored data)")
-
-    # --- Initial Data Setup ---
-    comdty = stored["comdty"]
-    out_df = pd.DataFrame(
-        data=stored["out_df"]["data"],
-        index=pd.to_datetime(stored["out_df"]["index"]),
-        columns=stored["out_df"]["columns"]
-    )
-    lookback_prd = stored["lookback_prd"]
-    fig2_3 = plot_chart_2_3()
-
-    # Early exit if no buttons are toggled
-    if not any(toggle_store.get(btn) for btn in tab_2_2_2_3_button_ids):
-        return warning_plot("⚠ No series selected")
-
-    chart2_1_series = pd.Series(
-        data=stored['series']['values'],
-        index=pd.to_datetime(stored['series']['index'])
-    )
-
-    # --- Trace Generation Configuration ---
-    # Config map for standard traces to reduce repetitive if-blocks
-    trace_config = {
-        "btn-nth_out": {
-            "func": Out_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
-            "legend": "nth Out",
-            "color": "#f58231" # Orange
-        },
-        "btn-mid_out": {
-            "func": Out_tab2_2,
-            "args": (out_df, stored['str_number'] + int(len(get_ratio(stored['str_name'])) / 2), lookback_prd),
-            "legend": "Mid Out",
-            "color": "#ffe119" # Bright Yellow
-        },
-        "btn-1sts12": {
-            "func": S12_tab2_2,
-            "args": (out_df, 1, lookback_prd),
-            "legend": "1st S12",
-            "color": "#46f0f0" # Cyan
-        },
-        "btn-nths12": {
-            "func": S12_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
-            "legend": "nth S12",
-            "color": "#3cb44b" # Strong Green
-        },
-        "btn-12ths12": {
-            "func": S12_tab2_2,
-            "args": (out_df, 12, lookback_prd),
-            "legend": "12th S12",
-            "color": "#f032e6" # Magenta
-        },
-        "btn-nthl6": {
-            "func": L6_tab2_2,
-            "args": (out_df, stored['str_number'], lookback_prd),
-            "legend": "nth L6",
-            "color": "rgb(152,78,163)"
-        }
-    }
-
-    # --- Handle Special Cases & One-Offs ---
-
-    # 1. Sum of eases/hikes (logic depends on `comdty`)
-    if toggle_store.get("btn-ease_hike"):
-        if comdty == "meets":
-            series_data = cal_sum_of_same_sign_meets(out_df, comdty, lookback_prd)
-        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA"}:
-            series_data = cal_sum_of_eases_hikes(out_df, comdty, lookback_prd)
-        else:
-            series_data = pd.Series(dtype='float64')
-        add_chart_2_3(fig2_3, chart2_1_series, series_data, legend="sum of eases/ hikes", color="#4363d8")
-
-    # 2. Treasury rates (fetch data only once for all related traces)
-    treasury_buttons = {"btn-effr", "btn-2yr", "btn-5yr", "btn-10yr"}
-    if any(toggle_store.get(btn) for btn in treasury_buttons):
-        df_rates = fetch_rates_cycle(filepath="SR3_ED.xlsm", sheetname="treasuries rates", lookback_prd=lookback_prd)
-        
-        treasury_map = {
-            "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "black"},
-            "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#e6beff"},
-            "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#bcf60c"},
-            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#fabebe"}
-        }
-
-        for btn, params in treasury_map.items():
-            if toggle_store.get(btn):
-                series_data = df_rates.loc[params["label"]]
-                add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=params["legend"], color=params["color"])
-
-    # --- Process Standard Traces from Config ---
-    for btn, config in trace_config.items():
-        if toggle_store.get(btn):
-            series_data = config["func"](*config["args"])
-            add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=config["legend"], color=config["color"])
-
-    return fig2_3
+    return fig2_2, fig2_3
 
 
 
 
 
-# ---------------------------------------------------------------------------------------------------------
-# CALLBACK:  shared KDE Input Toggle tab3 | tab4 | tab5 | tab6
-# ------------------------------------------------------------------------------------------------------------
 
-#rendering control panel in tab 3 to tab6
+
+
+# # ---------------------------------------------------------------------------------------------------------
+# # CALLBACK:  shared KDE Input Toggle tab3 | tab4 | tab5 | tab6
+# # ------------------------------------------------------------------------------------------------------------
+
+# #rendering control panel in tab 3 to tab6
 @app.callback(
     Output("kde-flags-shared-wrapper", "style"),
     Input("tabs", "value")
@@ -1274,7 +1536,7 @@ def toggle_kde_controls_visibility(active_tab):
         return {"display": "block"}  # or use "flex" if you prefer
     return {"display": "none"}
 
-#invisibility 
+# #invisibility 
 @app.callback(
     [
         Output("kde-val-row", "style"),
@@ -1296,28 +1558,29 @@ def toggle_input_visibility_kdes(kde_flags, active_tab):
 
 
 
-# # --------------------------------------------------------------------------------------------
-# # CALLBACK: KDE Plot (Tab 3)
-# # ----------------------------------------------------------------------------------------------------
+# # # --------------------------------------------------------------------------------------------
+# # # CALLBACK: KDE Plot (Tab 3)
+# # # ----------------------------------------------------------------------------------------------------
 @app.callback(
     Output('kde-plot', 'figure'),
-    Input('stored-data', 'data'),
+    Input('final-mainseriesonly-store', 'data'),
+    State('general-store', 'data'),
     Input('kde-flags-shared', 'value'),
     Input('kde-local-win-shared', 'value'),
     Input('kde-val-line-shared', 'value'),
     Input('kde-pc-line-shared', 'value'),
-    Input('tabs', 'value'), # Optional if tab switching logic is handled
     prevent_initial_call=False
 )
-def update_kde_plot_tab3(stored, kde_flags, local_win, val_line, pc_line, active_tab):
-    if not stored:
-        return warning_plot("⚠ No data available (stored problem)")
+def update_kde_plot_tab3(stored,general_store, kde_flags, local_win, val_line, pc_line):
+    if not stored or "values" not in stored or "index" not in stored:
+        return warning_plot("⚠️ Series data not available")
 
-#     if active_tab not in ["tab3", "tab4", "tab5", "tab6"]:
-#        raise dash.exceptions.PreventUpdate
-    # Recreate the series from stored data
-    series = pd.Series(data=stored["series"]["values"], index=stored["series"]["index"])
-
+   
+    series = pd.Series(
+    data=stored["values"],
+    index=pd.to_datetime(stored["index"], errors="coerce")
+    )
+        
     # Convert selected flags into a dict of bools
     plot_flags = {flag: (flag in kde_flags) for flag in [
         "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
@@ -1325,14 +1588,14 @@ def update_kde_plot_tab3(stored, kde_flags, local_win, val_line, pc_line, active
     ]}
 
     # print("plot_flags =", plot_flags)
-
+    comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
     # Build the figure
     return plot_main_kde(  
         plot_flags=plot_flags,
-        Comdty=stored['comdty'],
-        str_name=stored['str_name'],
-        str_number=stored['str_number'],
-        lookback_prd=stored.get('lookback_prd', 250),
+        Comdty=comdty,
+        str_name=str_name,
+        str_number=str_num,
+        lookback_prd=lookback_prd,
         series=series,
         pc_line=pc_line if plot_flags.get("pc_line") else None,
         val_line=val_line if plot_flags.get("val_line") else None,
@@ -1341,232 +1604,152 @@ def update_kde_plot_tab3(stored, kde_flags, local_win, val_line, pc_line, active
     )
 
 
-######################################################################################
+# ######################################################################################
 @app.callback(
     Output("cycle-store", "data"),
-    [
-        Input("stored-data", "data"),
-        Input("base-str-input", "value"),
-        Input("sum-first-n-base-input", "value"),
-        Input("hike-threshold-input", "value"),
-        Input("ease-threshold-input", "value"),
-    ]
+    Input("raw-data-store", "data"),
+    Input('final-mainseriesonly-store', 'data'),
+    Input("base-str-input", "value"),
+    Input("sum-first-n-base-input", "value"),
+    Input("hike-threshold-input", "value"),
+    Input("ease-threshold-input", "value"),
+    State('general-store', 'data'),
+    prevent_initial_call=False
 )
-def classify_and_store(stored, base_str, sum_first_n_base, hike_threshold, ease_threshold):
-    if not stored or "series" not in stored or "out_df" not in stored:
+def classify_and_store(stored_raw, stored_ser, base_str, sum_first_n_base, hike_threshold, ease_threshold, general_store):
+    if general_store is not None:
+        comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
+        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA", "ESTR"}:
+            return None
+
+    if not stored_raw or not stored_ser:
         return {}
     #print(base_str, sum_first_n_base, hike_threshold, ease_threshold)
+    if any in {base_str, sum_first_n_base, hike_threshold, ease_threshold} is None:
+        raise PreventUpdate
+    if base_str not in {"Out", "S3", "S6", "S12", "L6", "L3"}:
+        raise PreventUpdate
+    if sum_first_n_base< 1:
+        raise PreventUpdate
+    
+    sum_first_n_base= int(sum_first_n_base)
+    hike_threshold= int(hike_threshold)
+    ease_threshold= int(ease_threshold)
+
     series = pd.Series(
-        data= stored["series"]["values"],
-        index= pd.to_datetime(stored["series"]["index"])
+    data=stored_ser["values"],
+    index=pd.to_datetime(stored_ser["index"], errors="coerce")
     )
+
     if series.empty:
         return {}
-    comdty= stored["comdty"]
-    out_df = pd.DataFrame(
-        data=stored["out_df"]["data"],
-        index=pd.to_datetime(stored["out_df"]["index"]),
-        columns=stored["out_df"]["columns"]
+    comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
+    if not stored_raw or not stored_raw.get('data'):
+        return warning_plot("no raw data dict found update_tab_2_2 "), warning_plot("no raw data dict found update_tab_2_3 ")
+    
+    raw_df = pd.DataFrame(
+        data=stored_raw['data'],
+        index=pd.to_datetime(stored_raw.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+        columns=stored_raw.get('columns', None)
     )
-    if out_df.empty:
-        return {}
-
-    lookback_prd= stored["lookback_prd"]
-    base_df= process_help_calculation(comdty, out_df, base_str, lookback_prd, 15)
-    sum_first_n_base = int(sum_first_n_base)
-    hike_threshold = float(hike_threshold)
-    ease_threshold = float(ease_threshold)
-
+    
     hike_cycle, ease_cycle, side_ways = classify_cycle(
         series= series,
         comdty= comdty,
-        out_df= out_df,
+        out_df= raw_df,
         lookback_prd= lookback_prd,
         base_str=base_str,
         sum_first_n_base=sum_first_n_base,
         hike_threshold=hike_threshold,
         dovish_threshold=ease_threshold,
     )
-    
+    #print(len( hike_cycle), len(ease_cycle), len(side_ways))
+    # print(series)
+    # print(round(series.iloc[0], 2))
     return {
+        "latest": series.iloc[0],
         "hike": list(hike_cycle),
         "ease": list(ease_cycle),
         "sideways": list(side_ways)
-     }
+    }
 
 
-# ------------------------------------------------
-# CALLBACK: hike-KDE Plot (Tab 4 - Copycat)
-# ------------------------------------------------
+# # ----------------------------------------------------------------
+# # CALLBACK: hike-KDE Plot (Tab 4 - # --------------------------------------------------------------
+# # CALLBACK: ease-KDE Plot (Tab 5 # ------------------------------------------------------
+# # CALLBACK: sideways-KDE Plot (Tab 6 # ------------------------------------------------------------
+# # ----------------------------------------------------------------
 
 @app.callback(
-    Output('hike-kde-plot', 'figure'),
-    [
-        Input('stored-data', 'data'),
-        Input("cycle-store", "data"),
-        Input('kde-flags-shared', 'value'),
-        Input('kde-local-win-shared', 'value'),
-        Input('kde-val-line-shared', 'value'),
-        Input('kde-pc-line-shared', 'value'),
-        Input('tabs', 'value')
-    ],
-    prevent_initial_call=False
-)
-def update_kde_plot_tab4(stored, cycle_store, kde_flags, local_win, val_line, pc_line, active_tab):
-    if active_tab != "tab4":
-        raise dash.exceptions.PreventUpdate
-    #print("hello hike")
-    if not stored:
-        return warning_plot("⚠ No 'Hike' cycle data available as per your criteria (no parent data)")
-    
-    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
-        return warning_plot("⚠ Not relevent")
-           
-    # Parse full series
-    series = pd.Series(
-    data=stored["series"]["values"],
-    index=pd.to_datetime(stored["series"]["index"])
-    )
-
-    # Build plot_flags
-    plot_flags = {flag: (flag in kde_flags) for flag in [
-        "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
-        "mean", "med", "mod", "pc_line", "val_line", "band68", "band95"
-    ]}
-    
-    # Check for subseries (hike cycle)
-    if cycle_store and 'hike' in cycle_store:
-        sub_series = pd.Series(cycle_store["hike"])
-        print("hike points", len(sub_series))
-    else:
-        return warning_plot("⚠ No 'Hike' cycle data available as per your criteria (before plotted)")
-            
-    return plotted(
-        plot_flags=plot_flags,
-        Comdty=stored['comdty'],
-        str_name=stored['str_name'],
-        str_number=stored['str_number'],
-        sub_series=sub_series,
-        full_series=series,
-        pc_line=pc_line if plot_flags.get("pc_line") else None,
-        val_line=val_line if plot_flags.get("val_line") else None,
-        local_win=local_win if any(plot_flags.get(f) for f in ["local_mean", "local_xn", "local_bb"]) else None,
-        local_win_std=1,
-        cycle_name="Hike cycle"
-    )
-
-
-
-# ------------------------------------------------
-# CALLBACK: ease-KDE Plot (Tab 5 - Copycat)
-# ------------------------------------------------
-@app.callback(
+    [Output('hike-kde-plot', 'figure'),
     Output('ease-kde-plot', 'figure'),
-    Input('stored-data', 'data'),
+    Output('side-kde-plot', 'figure')],
     Input("cycle-store", "data"),
     Input('kde-flags-shared', 'value'),
-    Input('kde-local-win-shared', 'value'),
+
     Input('kde-val-line-shared', 'value'),
     Input('kde-pc-line-shared', 'value'),
-    Input('tabs', 'value'),  # 🆕 added
+    State('general-store', 'data'),
     prevent_initial_call=False
 )
-def update_kde_plot_tab5(stored, cycle_store, kde_flags, local_win, val_line, pc_line, active_tab):
-    if active_tab != "tab5":
-        raise dash.exceptions.PreventUpdate
+def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_store):
+    def warning_all(msg):
+        fig = warning_plot(msg)
+        return fig, fig, fig
 
-    if not stored:
-        return warning_plot("⚠ No 'Ease' cycle data available as per your criteria (no parent data)")
+    if general_store is not None:
+        comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
+        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA", "ESTR"}:
+            return warning_all(f"Not applicable for {comdty} commodity")
 
-    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
-        return warning_plot("⚠ Not relevent")
-    # Parse full series
-    series = pd.Series(data=stored["series"]["values"], index=stored["series"]["index"])
 
     # Build plot_flags
     plot_flags = {flag: (flag in kde_flags) for flag in [
         "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
         "mean", "med", "mod", "pc_line", "val_line", "band68", "band95"
     ]}
-
+    
     # Check for subseries (hike cycle)
-    if cycle_store and 'ease' in cycle_store:
-        sub_series = pd.Series(cycle_store["ease"])
-        print("ease points", len(sub_series))
-    else:
-        return warning_plot("⚠ No 'Ease' cycle data available as per your criteria (before plotted)")
+    if cycle_store is None:
+        return warning_all(f"No classification data available for {comdty} commodity")
+    latest_val = cycle_store.get("latest", None)
+    hike_series = pd.Series(cycle_store["hike"]) if "hike" in cycle_store else None
+    ease_series = pd.Series(cycle_store["ease"]) if "ease" in cycle_store else None
+    sideways_series = pd.Series(cycle_store["sideways"]) if "sideways" in cycle_store else None
+    # Check for subseries (ease cycle)
+    if hike_series is None:
+        hike_fig= warning_plot("⚠ No 'Hike' cycle data available")
+    if ease_series is None:
+        ease_fig= warning_plot("⚠ No 'Ease' cycle data available")
+    if sideways_series is None:
+        sideways_fig= warning_plot("⚠ No 'Sideways' cycle data available")
 
-    return plotted(
-        plot_flags=plot_flags,
-        Comdty=stored['comdty'],
-        str_name=stored['str_name'],
-        str_number=stored['str_number'],
-        sub_series=sub_series,
-        full_series=series,
+
+    hike_title= f"{comdty}{str_name}({str_num}) in Hike Cycle- {len(hike_series) if (hike_series is not None) else 0} pts"
+    ease_title= f"{comdty}{str_name}({str_num}) in Ease Cycle- {len(ease_series) if (ease_series is not None) else 0} pts"    
+    sideways_title= f"{comdty}{str_name}({str_num}) in Sideways Cycle- {len(sideways_series) if (sideways_series is not None) else 0} pts"       
+    
+    hike_fig= plotted_sub_KDE( plot_flags=plot_flags, sub_series= hike_series, title= hike_title, cycle_name= "Hike",
+        latest_val= latest_val,
         pc_line=pc_line if plot_flags.get("pc_line") else None,
-        val_line=val_line if plot_flags.get("val_line") else None,
-        local_win=local_win if any(plot_flags.get(f) for f in ["local_mean", "local_xn", "local_bb"]) else None,
-        local_win_std=1,
-        cycle_name="Ease cycle"
+        val_line=val_line if plot_flags.get("val_line") else None
     )
-
-# # -----------------------------------------------------------------------------------------------------
-# # CALLBACK: side-KDE Plot (Tab 6 - Copycat)
-# # -------------------------------------------------------------------------------------------------------
-@app.callback(
-    Output('side-kde-plot', 'figure'),
-    Input('stored-data', 'data'),
-    Input("cycle-store", "data"),
-    Input('kde-flags-shared', 'value'),
-    Input('kde-local-win-shared', 'value'),
-    Input('kde-val-line-shared', 'value'),
-    Input('kde-pc-line-shared', 'value'),
-    Input('tabs', 'value'),  # 🆕 added
-    prevent_initial_call=False
-)
-
-def update_kde_plot_tab6(stored, cycle_store, kde_flags, local_win, val_line, pc_line, active_tab):
-    if active_tab != "tab6":
-        raise dash.exceptions.PreventUpdate
-    if not stored:
-        return warning_plot("⚠ No 'Side' ways cycle data available as per your criteria (no parent data)")
-
-    if stored["comdty"] in {"VIX", "FVS", "meets", "SR1","SZI0", "VIX- VOXX" }:
-        return warning_plot("⚠ Not relevent")
-    # Parse full series
-    series = pd.Series(data=stored["series"]["values"], index=stored["series"]["index"])
-
-    # Build plot_flags
-    plot_flags = {flag: (flag in kde_flags) for flag in [
-        "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
-        "mean", "med", "mod", "pc_line", "val_line", "band68", "band95"
-    ]}
-    # Check for subseries (side ways cycle)
-    #print("cs", len(cycle_store),len(cycle_store["sideways"]) )
-    if cycle_store and 'sideways' in cycle_store:
-        sub_series = pd.Series(cycle_store["sideways"])
-        print("side ways points", len(sub_series))
-    else:
-        return warning_plot("⚠ No 'Side' ways cycle data available as per your criteria (before plotted)")
-            
-    return plotted(
-        plot_flags=plot_flags,
-        Comdty=stored['comdty'],
-        str_name=stored['str_name'],
-        str_number=stored['str_number'],
-        sub_series=sub_series,
-        full_series=series,
+    ease_fig= plotted_sub_KDE( plot_flags=plot_flags, sub_series= ease_series, title= ease_title,cycle_name= "Ease",
+        latest_val= latest_val,
         pc_line=pc_line if plot_flags.get("pc_line") else None,
-        val_line=val_line if plot_flags.get("val_line") else None,
-        local_win=local_win if any(plot_flags.get(f) for f in ["local_mean", "local_xn", "local_bb"]) else None,
-        local_win_std=1,
-        cycle_name="Side ways cycle"
+        val_line=val_line if plot_flags.get("val_line") else None
+    ) 
+    sideways_fig= plotted_sub_KDE( plot_flags=plot_flags, sub_series= sideways_series,title= sideways_title, cycle_name= "Sideways",
+        latest_val= latest_val,
+        pc_line=pc_line if plot_flags.get("pc_line") else None,
+        val_line=val_line if plot_flags.get("val_line") else None
     )
+    return hike_fig, ease_fig, sideways_fig
 
-############################################## tab 7 ############################################################################
+# ############################################## tab 7 ############################################################################
 #computed 3d df  storing in cache memory 
-@cache.memoize()  # The decorator that enables caching # no need to callback expilicitly in caching
-def cached_compute_3d_df(out_df_json: dict, local_win: int, curve_len: int):
+@cache.memoize()  
+def cached_compute_3d_df( raw_df, local_win: int, curve_len: int):
     """
     A wrapper for compute_3d_structure that is memoized (cached).
     It takes a JSON-serializable dict and converts it to a DataFrame internally.
@@ -1574,14 +1757,14 @@ def cached_compute_3d_df(out_df_json: dict, local_win: int, curve_len: int):
     # This print statement will only execute when the function is not using a cached result
     print(f"Cache memo: Running computation for 3d df for win={local_win}, len={curve_len}...")
     
-    # Convert the dictionary from dcc.Store back into a DataFrame
-    out_df = pd.DataFrame(
-        data=out_df_json["data"],
-        index=pd.to_datetime(out_df_json["index"]),
-        columns=out_df_json["columns"]
-    )
+    # # Convert the dictionary from dcc.Store back into a DataFrame
+    # raw_df = pd.DataFrame(
+    #     data=stored_raw['data'],
+    #     index=pd.to_datetime(stored_raw.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+    #     columns=stored_raw.get('columns', None)
+    # )
     # Call original, expensive function
-    return compute_3d_structure(out_df, local_win=local_win, curve_length=curve_len)
+    return compute_3d_structure(raw_df, local_win=local_win, curve_length=curve_len)
 
 
 
@@ -1658,53 +1841,62 @@ def toggle_fullscreen(n_clicks, is_fullscreen):
 @app.callback(
     Output('heatmap-matrix', 'figure'),
     Output('heatmap-ready-signal', 'data'),
-    Input('stored-data', 'data'),
+    Input('raw-data-store', 'data'),
     Input('dropdown-ratio', 'value'),
     Input('input-local-window', 'value'),
     Input('input-curve-length', 'value'),
     Input('tab7-buttons-store-price', 'data'),
     Input('tab7-buttons-store-color', 'data'),
     Input('tabs', 'value'),
+    State('general-store', 'data'),
     prevent_initial_call=True
 )
-def update_tab_heatmap_basic(stored,selected_ratio, local_win, curve_len, toggle_store_price, toggle_store_color, tab):
-    if not stored:
+def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len, toggle_store_price, toggle_store_color, tab, general_store):
+    if not raw_data_dict:
         return warning_plot("⚠ data not available (no stored data)"), time.time()
 
-    # 2. Load and Prepare Core Data
-    # out_df = pd.DataFrame(
-    #     data=stored["out_df"]["data"],
-    #     index=pd.to_datetime(stored["out_df"]["index"]),
-    #     columns=stored["out_df"]["columns"]
-    # )
-    #str_data_3d = compute_3d_structure(out_df, local_win=local_win, curve_length=curve_len)
     if not selected_ratio:
-        selected_ratio=  {"Out", "S3","L3","L6"} # Return an empty figure
+        selected_ratio=  {"Out", "S3","S6","L3","L6"} # Return an empty figure
     
-    # commodity = stored.get("comdty")
-    # if commodity in {"meets", "SR1", "SZI0", "FVS", "VIX", "VIX- VOXX"}:
-    #     initial_list=  {"Out", "S3","L3","L6", "1X On- 2X On+1", "2X On- 1X On+1", "2X On- 3X On+1", "3X On- 2X On+1", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1" }
-
-
-    out_df_json = stored.get("out_df")
-    if out_df_json is None:
+    if general_store is not None:
+        comdty = general_store[0]
+        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+            selected_ratio = [index[i] for i in list(range(0, 4)) + list(range(28, 34))]
+    
+    if not raw_data_dict.get('data'):
+        return {}
+    
+    raw_df = pd.DataFrame(
+        data=raw_data_dict['data'],
+        index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+        columns=raw_data_dict.get('columns', None)
+    )
+    
+    if raw_df is None:
         raise PreventUpdate  # or handle gracefully
     
-    str_data_3d = cached_compute_3d_df(out_df_json,  local_win, curve_len)
+    str_data_3d = cached_compute_3d_df(raw_df,  local_win, curve_len)
     filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
 
     latest_date =  filtered_3d_df.index.get_level_values("Date").unique()[0]
     # Slice the data to get the datasets for the heatmap layers.
     latest_df =  filtered_3d_df.loc[latest_date]
-    risk_reward_df, risk_reward_diff_df, roll_down_df = compute_risk_reward_roll_df(latest_df)
+    risk_reward_df, risk_reward_diff_df, roll_down_df, roll_up_df = compute_risk_reward_roll_df(latest_df)
     percentile_df = compute_percentile_df( filtered_3d_df)
+    zscore_df=    compute_zscore_df( filtered_3d_df)
+    range_df= compute_range_df(filtered_3d_df)
+    regime_df= classify_regime_in_series(filtered_3d_df)
     #print("pd", percentile_df)
     values_btn_fig_map = {
         "btn-price": lambda: generate_heatmap(1, latest_df),
         "btn-percentile": lambda: generate_heatmap(0, percentile_df),
+        "btn-zscore": lambda: generate_heatmap(1, zscore_df),
         "btn-riskrewarddiff": lambda: generate_heatmap(1, risk_reward_diff_df),
         "btn-riskreward": lambda: generate_heatmap(1, risk_reward_df),
         "btn-rolldown": lambda: generate_heatmap(1, roll_down_df),
+        "btn-rollup": lambda: generate_heatmap(1, roll_up_df),
+        "btn-range": lambda: generate_heatmap(1, range_df),
+        "btn-trend": lambda: generate_heatmap(1, regime_df),
     }
 
     heatmap = None
@@ -1712,13 +1904,19 @@ def update_tab_heatmap_basic(stored,selected_ratio, local_win, curve_len, toggle
         if toggle_store_price.get(btn_id, False):
             heatmap= generate_func() 
             break
-            
+
+    heatmap = hovertemplate_heatmap(heatmap, latest_df, roll_down_df, roll_up_df, percentile_df)   
     colors_btn_fig_map = {
-        "btn-price_2": lambda: color_heatmap(heatmap, 1, latest_df),
+        #"btn-price_2": lambda: color_heatmap(heatmap, 1, latest_df),
         "btn-percentile_2": lambda: color_heatmap(heatmap, 0, percentile_df),
+        "btn-zscore_2": lambda: color_heatmap(heatmap, 1, zscore_df),
         "btn-riskrewarddiff_2": lambda: color_heatmap( heatmap, 1, risk_reward_diff_df),
         "btn-riskreward_2": lambda: color_heatmap(heatmap, 1, risk_reward_df),
         "btn-rolldown_2": lambda: color_heatmap(heatmap, 1, roll_down_df),
+        "btn-rollup_2": lambda: color_heatmap(heatmap, 1, roll_up_df),
+        "btn-range": lambda: generate_heatmap(1, range_df),
+        #"btn-trend": lambda: generate_heatmap(1, trend_df),
+
     }
     filter_btn_fig_map = {
         "btn-rank595_2": lambda: filter_grey(heatmap, 595, percentile_df), # Assuming these use the same data
@@ -1747,46 +1945,7 @@ def update_tab_heatmap_basic(stored,selected_ratio, local_win, curve_len, toggle
     return heatmap, time.time() 
 
 
-#hover enrichment
-@app.callback(
-    Output('heatmap-matrix', 'figure', allow_duplicate=True), # allow_duplicate is needed
-    Input('heatmap-ready-signal', 'data'), #set be run after 2 sec to enrich hover details
-    #Input('enrich-hover-btn', 'n_clicks'),  # This trigger could be a button, interval, etc.
-    State('heatmap-matrix', 'figure'),      # Gets the figure that is ALREADY on the screen
-    State('stored-data', 'data'),           # Gets the data needed for hover calculations
-    Input('dropdown-ratio', 'value'),
-    State('input-local-window', 'value'),
-    State('input-curve-length', 'value'),
-    prevent_initial_call=True
-)
-def update_heatmap_hoverinfo(n_intervals, existing_figure, stored,selected_ratio, local_win, curve_len):
-    # 1. Check Trigger and Validate State
-    # Only run if the callback was triggered and a figure already exists.
-    #print("uranium enrichment loading ..." )
-    if not existing_figure:
-        return dash.no_update
-    #print("uranium enrichment loading ...." )
-    if not selected_ratio:
-        selected_ratio=  {"Out", "S3","L3"} # Return an empty figure
-
-
-    # 2. Re-calculate Data Needed for Hover # For optimization, this data could also be passed via a dcc.Store.
-    out_df_json = stored.get("out_df")
-    if out_df_json is None:
-        raise PreventUpdate  # or handle gracefully
-    str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
-    filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
-    latest_date =filtered_3d_df.index.get_level_values("Date").unique()[0]
     
-    # Get all the necessary DataFrames for the rich hover text.
-    latest_df = filtered_3d_df.loc[latest_date]
-    risk_reward_df, risk_reward_diff_df, roll_down_df = compute_risk_reward_roll_df(latest_df)
-    percentile_df = compute_percentile_df(filtered_3d_df)
-
-    enriched_figure = hovertemplate_heatmap(
-        existing_figure, latest_df, risk_reward_df, risk_reward_diff_df, roll_down_df, percentile_df
-    )
-    return enriched_figure
 
 #################### side detail panel ###########
 # Inside the display_cell_details callback...
@@ -1794,27 +1953,36 @@ def update_heatmap_hoverinfo(n_intervals, existing_figure, stored,selected_ratio
     Output('heatmap-details-panel', 'children'),
     Output('heatmap-details-panel', 'style'),
     Input('heatmap-matrix', 'clickData'),
-    State('stored-data', 'data'),
+    State('raw-data-store', 'data'),
     Input('dropdown-ratio', 'value'),
     State('input-local-window', 'value'),
     State('input-curve-length', 'value'),
     prevent_initial_call=True
 )
-def display_cell_details(click_data, stored,selected_ratio, local_win, curve_len):
+def display_cell_details(click_data, raw_data_dict ,selected_ratio, local_win, curve_len):
     if click_data is None:
         return dash.no_update, dash.no_update
     
     if not selected_ratio:
-        selected_ratio=  {"Out", "S3","L3"} # Return an empty figure
+        selected_ratio=  {"Out", "S3","S6","L3","L6"} # Return an empty figure
     # --- 1. Extract Info from the Clicked Cell ---
     point = click_data['points'][0]
     x_val, y_val = point['x'], point['y']
     
     
-    out_df_json = stored.get("out_df")
-    if out_df_json is None:
+    if not raw_data_dict.get('data'):
+        return {}
+    
+    raw_df = pd.DataFrame(
+        data=raw_data_dict['data'],
+        index=pd.to_datetime(raw_data_dict.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
+        columns=raw_data_dict.get('columns', None)
+    )
+    
+    if raw_df is None:
         raise PreventUpdate  # or handle gracefully
-    str_data_3d = cached_compute_3d_df(out_df_json, local_win, curve_len)
+
+    str_data_3d = cached_compute_3d_df(raw_df, local_win, curve_len)
     filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
     clicked_series=  filtered_3d_df.loc[(slice(None), x_val, y_val)]
     prev_val, next_val= get_adjacent_values( filtered_3d_df,  x_val, y_val)
@@ -1933,22 +2101,20 @@ def warning_plot(warning):
     fig.update_xaxes(fixedrange=True)
     return fig
 
+
+
+# Function to pick port
+def get_free_port(preferred_port, fallback_port):
+    """Try preferred_port, if busy then use fallback_port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(("127.0.0.1", preferred_port)) != 0:
+            return preferred_port  # free
+        else:
+            return fallback_port   # fallback
 # ------------------------------------------------
 # MAIN
 # ------------------------------------------------
-def find_available_port(start=8050, max_tries=50):
-    for port in range(start, start + max_tries):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    raise RuntimeError("No available ports found")
-
-port = find_available_port()
-
 if __name__ == '__main__':
-    #app.run(debug= False, host='0.0.0.0', port=8050)# for live
-    app.run(debug=False, port=port) #downlodable
-    #app.run(debug= True)
+    #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
+    #app.run(debug= True) #self
+    app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
