@@ -642,7 +642,6 @@ def create_blank_heatmap(layer_df):
     )
 
     fig.update_layout(
-        # height=500,
         plot_bgcolor='lightgray',
         xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
         yaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),

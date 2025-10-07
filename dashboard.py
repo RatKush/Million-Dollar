@@ -208,26 +208,22 @@ def get_kde_controls():
                 {"label": "Latest", "value": "Latest"},
                 {"label": "Band 68%", "value": "band68"},
                 {"label": "Band 95%", "value": "band95"},
-                {"label": "Local Mean", "value": "local_mean"},
-                {"label": "Local XN", "value": "local_xn"},
-                {"label": "Local Mean ± 1σ", "value": "local_bb"},
-                {"label": "Mean", "value": "mean"},
+                {"label": "mean ± 1σ", "value": "bb1"},
+                {"label": "mean ± 2σ", "value": "bb2"},
                 {"label": "Median", "value": "med"},
-                {"label": "Mode", "value": "mod"},
                 {"label": "% Line", "value": "pc_line"},
                 {"label": "Val Line", "value": "val_line"},
-                {"label": "± 1σ", "value": "bb1"},
-                {"label": "± 2σ", "value": "bb2"},
+                
             ],
             value=["Latest","med", "band68", "band95"],
             switch=True,
             className="px-3 mb-3"
         ),
 
-        html.Div([
-            html.Label("Local Win", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
-        ], className=" px-3 mb-2 hidden-row", id="kde-local-row"),
+        # html.Div([
+        #     html.Label("Local Win", className="form-label", style={"width": "68%"}),
+        #     dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
+        # ], className=" px-3 mb-2 hidden-row", id="kde-local-row"),
 
         html.Div([
             html.Label("Val Line", className="form-label", style={"width": "68%"}),
@@ -242,15 +238,6 @@ def get_kde_controls():
     ], className="control-panel-1")
 
 
-
-
-# dcc.Store(id='kde-shared-store', storage_type='session',
-#     data={
-#         'flags': ["Latest", "local_mean", "band68","band95" ],
-#         'local_win': 10,
-#         'val_line': 0,
-#         'pc_line': 95
-#     })
 #wrapper for easy styling and clarity needed to add in layout 
 dbc.Container(
     id="kde-flags-shared-wrapper",
@@ -366,7 +353,7 @@ app.layout = dbc.Container([
         ]),
         dbc.Col([
             html.Label("Lookback Period", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=1, className='form-control')
+            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=5, className='form-control')
         ]),
         dbc.Col([
             html.Label(" "),
@@ -376,14 +363,6 @@ app.layout = dbc.Container([
 
 
 ####################### kde -control for tab3, tab4, tab5, tab6--- needto declare beffore tabs declation#######################
-    # dcc.Store(id='kde-shared-store', storage_type='session',
-    # data={
-    #     'flags': ["Latest", "local_mean", "band68","band95" ],
-    #     'local_win': 10,
-    #     'val_line': 0,
-    #     'pc_line': 95
-    # }),
-    #wrapper for easy styling and clarity 
     dbc.Container(
         id="kde-flags-shared-wrapper",
         children=get_kde_controls(),
@@ -425,7 +404,7 @@ app.layout = dbc.Container([
                                     {"label": "Settle", "value": "Settle"},
                                     {"label": "Date1", "value": "Date1"},
                                     {"label": "Date2", "value": "Date2"},
-                                    {"label": "Mean", "value": "MA"},
+                                    {"label": "MA", "value": "MA"},
                                     {"label": "Median", "value": "MED"},
                                     {"label": "Quantile Series", "value": "quant_ser"},
                                     {"label": "Bollinger Band", "value": "BB"},
@@ -443,8 +422,8 @@ app.layout = dbc.Container([
                                 ], id="win-local-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
-                                    dbc.Col(dbc.Label("Settle offset"), width=7),
-                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=1, debounce=True), width=5)
+                                    dbc.Col(dbc.Label("Settle offset"), width=6),
+                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
                                 ], id="settle-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
@@ -458,8 +437,8 @@ app.layout = dbc.Container([
                                 ], id="date2-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
-                                    dbc.Col(dbc.Label("Quantile"), width=3),
-                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=1, debounce=True), width=9)
+                                    dbc.Col(dbc.Label("Quantile"), width=6),
+                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=1, debounce=True), width=6)
                                 ], id="quantile-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
@@ -1580,8 +1559,7 @@ def toggle_kde_controls_visibility(active_tab):
 @app.callback(
     [
         Output("kde-val-row", "style"),
-        Output("kde-pc-row", "style"),
-        Output("kde-local-row", "style")
+        Output("kde-pc-row", "style")
     ],
     [
         Input("kde-flags-shared", "value"),
@@ -1593,7 +1571,6 @@ def toggle_input_visibility_kdes(kde_flags, active_tab):
     return [
         {"display": "flex"} if "val_line" in kde_flags else {"display": "none"},
         {"display": "flex"} if "pc_line" in kde_flags else {"display": "none"},
-        {"display": "flex"} if any(f in kde_flags for f in ["local_mean", "local_xn", "local_bb"]) else {"display": "none"}
     ]
 
 
@@ -1606,12 +1583,11 @@ def toggle_input_visibility_kdes(kde_flags, active_tab):
     Input('final-mainseriesonly-store', 'data'),
     State('general-store', 'data'),
     Input('kde-flags-shared', 'value'),
-    Input('kde-local-win-shared', 'value'),
     Input('kde-val-line-shared', 'value'),
     Input('kde-pc-line-shared', 'value'),
     prevent_initial_call=False
 )
-def update_kde_plot_tab3(stored,general_store, kde_flags, local_win, val_line, pc_line):
+def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     if not stored or "values" not in stored or "index" not in stored:
         return warning_plot("⚠️ Series data not available")
 
@@ -1623,8 +1599,8 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, local_win, val_line, p
         
     # Convert selected flags into a dict of bools
     plot_flags = {flag: (flag in kde_flags) for flag in [
-        "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
-        "mean", "med", "mod", "pc_line", "val_line", "band68", "band95"
+        "Latest", "bb1", "bb2", 
+         "med",  "pc_line", "val_line", "band68", "band95"
     ]}
 
     # print("plot_flags =", plot_flags)
@@ -1639,8 +1615,6 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, local_win, val_line, p
         series=series,
         pc_line=pc_line if plot_flags.get("pc_line") else None,
         val_line=val_line if plot_flags.get("val_line") else None,
-        local_win=local_win if any(plot_flags.get(f) for f in ["local_mean", "local_xn", "local_bb"]) else None,
-        local_std=1
     )
 
 
@@ -1745,8 +1719,8 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
 
     # Build plot_flags
     plot_flags = {flag: (flag in kde_flags) for flag in [
-        "Latest", "bb1", "bb2", "local_mean", "local_xn", "local_bb",
-        "mean", "med", "mod", "pc_line", "val_line", "band68", "band95"
+        "Latest", "bb1", "bb2", 
+         "med",  "pc_line", "val_line", "band68", "band95"
     ]}
     
     # Check for subseries (hike cycle)

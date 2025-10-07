@@ -21,7 +21,7 @@ def initiate_plot(title):
         title={"text": f"{title}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
         #title=dict(text=title, x=0.5, y=0.99, xanchor="center",  "font": {"size": 14, "color": "#1f2128"}),
         legend=dict(x=0.5, y=0.96, orientation="h", xanchor="center", yanchor="bottom"),
-        height=520,
+        height=530,
         margin=dict(l=10, r=10, t=30, b=20),
         dragmode="pan"
     )
@@ -56,11 +56,6 @@ def compute_stats(series):
     series = pd.to_numeric(series, errors='coerce').dropna()
     if len(series) < 2:
         return None
-    try:
-        mod_val = mode(series, keepdims=True).mode
-        mod_val = mod_val[0] if len(mod_val) > 0 else np.nan
-    except Exception:
-        mod_val = np.nan
 
     std_val = series.std()
     z_val = np.nan
@@ -73,7 +68,6 @@ def compute_stats(series):
         "z":  z_val,
         "mean": series.mean(),
         "med": np.median(series),
-        "mod": mod_val,
         "std": round(series.std(), 1)
     }
 
@@ -188,9 +182,9 @@ def classify_cycle(series,comdty, out_df,lookback_prd, base_str, sum_first_n_bas
 
 
 
-def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, pc_line, val_line, local_win=21, local_std=1):
+def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, pc_line, val_line):
     """
-    Plot KDE with optional overlays (median, mode, BB, local stats, value line).
+    Plot KDE with optional overlays (median, BB, local stats, value line).
     """
     lbp = min(len(series), lookback_prd)
     #print(len(series))
@@ -229,29 +223,27 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
         u= get_percentile(series, 97.5)
         add_band_mask(fig, l, u, "KDE", name=f"band95")
 
-    if plot_flags.get("mean", 1):
-        val = round(stats['mean'], 1)
-        rank = round(get_rank(series, val))
-        add_vline(fig, val, color='green', dash='dash', text=f"Mean({val}/ {rank}%)")
+    # if plot_flags.get("mean", 1):
+    #     val = round(stats['mean'], 1)
+    #     rank = round(get_rank(series, val))
+    #     add_vline(fig, val, color='#1A7F37', dash='dash', text=f"Mean({val} | {rank}%)")
 
 
     if plot_flags.get("med", 1):
         val = round(stats['med'], 1)
         rank = round(get_rank(series, val))
-        add_vline(fig, val, color='green', dash='dash', text=f"Med({val}/ {rank}%)")
-
-    if plot_flags.get("mod", 1):
-        val = round(stats['mod'], 1)
-        rank = round(get_rank(series, val))
-        add_vline(fig, val, color='purple', dash='dash', text=f"Mode({val}/ {rank}%)")
-
-
+        add_vline(fig, val, color='#7B1FA2', dash='dash', text=f"Med({val} | {rank}%)")
+#     [
+#     "#C00000", "#E66100", "#B8860B", "#1A7F37", "#008B8B",
+#     "#005BBB", "#483D8B", "#7B1FA2", "#AD1457", "#404040"
+# ] #colors
+   
     if plot_flags.get("pc_line", 1):
         if pc_line is not None:
             try:
                 percentile_val = get_percentile(series, pc_line)
                 pc_line = float(pc_line)
-                add_vline(fig, percentile_val, color='green', dash='dot', text=f"Val ({percentile_val}/ {pc_line}%)")
+                add_vline(fig, percentile_val, color="#07031D", dash='dash', text=f"Val ({percentile_val} | {pc_line}%)")
             except (ValueError, TypeError):
                 # ignore bad inputs (non-numeric)
                 pass
@@ -271,32 +263,32 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
                 rank = round(get_rank(series, val))
                 val = round(val, 1)
 
-                add_vline(fig, val, color='green', dash='dot', text=f"Val ({val}/ {rank}%)")
+                add_vline(fig, val, color='#005BBB', dash='dash', text=f"Val ({val} | {rank}%)")
             except (ValueError, TypeError):
                 # ignore bad inputs (non-numeric)
                 pass
 
-    local_win = 21 if local_win is None else int(local_win)
-    local_std = 1 if local_std is None else int(local_std)    
-    small_win = small_window_stats(series, small_window=local_win, std_multi=local_std)
+    # local_win = 21 if local_win is None else int(local_win)
+    # local_std = 1 if local_std is None else int(local_std)    
+    # small_win = small_window_stats(series, small_window=local_win, std_multi=local_std)
 
-    if plot_flags.get("local_mean", 1):
-        val = round(small_win['mean'], 1)
-        add_vline(fig, small_win['mean'], color='goldenrod', dash='dot', width=1.5, text=f"local mean({val})")
+    # if plot_flags.get("local_mean", 1):
+    #     val = round(small_win['mean'], 1)
+    #     add_vline(fig, small_win['mean'], color="#853910", dash='dash', width=1.5, text=f"local mean@{local_win}d ({val})")
 
-    if plot_flags.get("local_xn", 1):
-        val_min = round(small_win['min'], 1)
-        val_max = round(small_win['max'], 1)
-        add_vline(fig, small_win['min'], color='orange', dash='dot', width=2, text=f"local min@{local_win}d ({val_min})")
-        add_vline(fig, small_win['max'], color='orange', dash='dot', width=2, text=f"local max@{local_win}d ({val_max})")
+    # if plot_flags.get("local_xn", 1):
+    #     val_min = round(small_win['min'], 1)
+    #     val_max = round(small_win['max'], 1)
+    #     add_vline(fig, small_win['min'], color='orange', dash='dash', width=2, text=f"local min@{local_win}d ({val_min})")
+    #     add_vline(fig, small_win['max'], color='orange', dash='dash', width=2, text=f"local max@{local_win}d ({val_max})")
 
-    if plot_flags.get("local_bb", 1):
-        add_band_mask(fig, small_win['mean'] - small_win['std'], small_win['mean'] + small_win['std'], "KDE", name=f"local bb@{local_win}d (σ=1)")
+    # if plot_flags.get("local_bb", 1):
+    #     add_band_mask(fig, small_win['mean'] - small_win['std'], small_win['mean'] + small_win['std'], "KDE", name=f"local bb@{local_win}d (σ=1)")
 
     if plot_flags.get("Latest", 1):
         latest_value = round(series.iloc[0], 2)
         rank = round(get_rank(series, latest_value))
-        add_vline(fig, latest_value, color='red', width=3, text=f"Latest({latest_value}/ {rank}%)")
+        add_vline(fig, latest_value, color='red', width=3, text=f"Latest({latest_value} | {rank}%)")
 
     #fig.show(config={"scrollZoom": True})
     return fig
@@ -342,27 +334,23 @@ def plotted_sub_KDE(plot_flags, sub_series,title,cycle_name, latest_val, pc_line
         u= get_percentile(sub_series, 97.5)
         add_band_mask(fig, l, u, "KDE", name=f"band95")
 
-    if plot_flags.get("mean", 1):
-        val = round(stats['mean'], 1)
-        rank = round(get_rank(sub_series, val))
-        add_vline(fig, val, color='green', dash='dash', text=f"Mean({val}/ {rank}%)")
+    # if plot_flags.get("mean", 1):
+    #     val = round(stats['mean'], 1)
+    #     rank = round(get_rank(sub_series, val))
+    #     add_vline(fig, val, color='#1A7F37', dash='dash', text=f"Mean({val} | {rank}%)")
 
     if plot_flags.get("med", 1) and stats is not None:
         val = round(stats['med'], 1)
         rank = round(get_rank(sub_series, val))
-        add_vline(fig, stats['med'], color='green', dash='dash', text=f"Med({val}/ {rank}%)")
+        add_vline(fig, stats['med'], color='#7B1FA2', dash='dash', text=f"Med({val} | {rank}%)")
 
-    if plot_flags.get("mod", 1):
-        val = round(stats['mod'], 1)
-        rank = round(get_rank(sub_series, val))
-        add_vline(fig, val, color='purple', dash='dash', text=f"Mode({val}/ {rank}%)")
 
     if plot_flags.get("pc_line", 1):
         if pc_line is not None:
             try:
                 percentile_val = get_percentile(sub_series, pc_line)
                 pc_line = float(pc_line)
-                add_vline(fig, percentile_val, color='green', dash='dot', text=f"Val ({percentile_val}/ {pc_line}%)")
+                add_vline(fig, percentile_val, color='#483D8B', dash='dash', text=f"Val ({percentile_val} | {pc_line}%)")
             except (ValueError, TypeError):
                 # ignore bad inputs (non-numeric)
                 pass
@@ -381,7 +369,7 @@ def plotted_sub_KDE(plot_flags, sub_series,title,cycle_name, latest_val, pc_line
                 rank = round(get_rank(sub_series, val))
                 val = round(val, 1)
 
-                add_vline(fig, val, color='green', dash='dot', text=f"Val ({val}/ {rank}%)")
+                add_vline(fig, val, color='#005BBB', dash='dash', text=f"Val ({val} | {rank}%)")
             except (ValueError, TypeError):
                 # ignore bad inputs (non-numeric)
                 pass
@@ -390,7 +378,7 @@ def plotted_sub_KDE(plot_flags, sub_series,title,cycle_name, latest_val, pc_line
         latest_val = round(latest_val, 2)
         rank = get_rank(sub_series, latest_val)
         if not np.isnan(rank):
-            add_vline(fig, latest_val, color='red', width=3, text=f"Latest({latest_val}/ {round(rank)}%)")
+            add_vline(fig, latest_val, color='red', width=3, text=f"Latest({latest_val} | {round(rank)}%)")
 
     #fig.show(config={"scrollZoom": True})
     return fig
