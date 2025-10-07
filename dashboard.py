@@ -2123,6 +2123,6 @@ def get_free_port(preferred_port, fallback_port):
 # MAIN
 # ------------------------------------------------
 if __name__ == '__main__':
-    #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
-    app.run(debug= True) #self
+    app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
+    #app.run(debug= True) #self
     #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
