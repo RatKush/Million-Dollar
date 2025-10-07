@@ -383,19 +383,18 @@ app.layout = dbc.Container([
                     dbc.Col(dcc.Loading(
                         id="loading-curve",
                         type="circle",
-                        children=html.Div(dcc.Graph(id='curve-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-1 my-2 rounded")
+                        children=html.Div(
+                            dcc.Graph(
+                                id='curve-plot',
+                                config={'scrollZoom': True, 'displayModeBar': False}
+                            ),
+                            className="panel-card my-2"
+                        )
                         ), width=10
                     ),
                     dbc.Col([
                         html.Div([
-                            html.H5(
-                                "Plot Controls",
-                                style={
-                                    "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
-                                    "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
-                                    "borderBottom": "1px solid #3a3f4b", "margin": "0"
-                                }
-                            ),
+                            html.H5("Plot Controls", className="panel-title"),
 
                             dbc.Checklist(
                                 id='plot-flags',
@@ -446,16 +445,10 @@ app.layout = dbc.Container([
                                     dbc.Col(dbc.Input(id="bb-std-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
                                 ], id="bb-std-row", className="mb-2", style={"display": "none"}),
 
-                            ], gap=1)
+                            ], gap=2)
                         ],
-
-                        style={
-                            "border": "1px solid #3a3f4b",
-                            "borderRadius": "8px",
-                            "backgroundColor": "#2b2e35",
-                            "padding": "10px",
-                            "marginTop": "5px"
-                        })
+                        className="panel-card"
+                        )
                     ], width=2, style={"paddingLeft": "0px", "marginTop": "2px"})
                 ]),
             #]),
@@ -477,6 +470,7 @@ app.layout = dbc.Container([
                                 style={"width": "100%"},  # or use a maxHeight with scroll
                                 
                             ),
+                        className="panel-card",
                         style={"overflow": "hidden", "position": "relative"}  # container style
                         )
                     ), width=12)
