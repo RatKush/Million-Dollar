@@ -200,31 +200,63 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> tuple[pd.DataFrame, 
     latest_df["Next"] = latest_df.groupby("Structure")["Value"].shift(-1)
 
     # Roll down = current - prev
-    roll_down = latest_df["Value"] - latest_df["Prev"]
-    # Roll up = current - next
-    roll_up = latest_df["Value"] - latest_df["Next"]
+    roll_down_value = latest_df["Prev"]- latest_df["Value"]
+    conditions = [
+        roll_down_value > 0,
+        roll_down_value < 0,
+        roll_down_value == 0
+    ]
 
+    choices = [
+        "▲" + roll_down_value.abs().round(1).astype(str),
+        "▼" + roll_down_value.abs().round(1).astype(str),
+        "0.0" 
+    ]
+
+    roll_down = pd.Series(
+        np.select(conditions, choices, default=""), 
+        index=roll_down_value.index
+    )
+
+    # Roll up = current - next
+    roll_up_value =  latest_df["Next"] - latest_df["Value"]
+    conditions = [
+        roll_up_value > 0,
+        roll_up_value < 0,
+        roll_up_value == 0
+    ]
+
+    choices = [
+        "▲" + roll_up_value.abs().round(1).astype(str),
+        "▼" + roll_up_value.abs().round(1).astype(str),
+        "0.0" 
+    ]
+
+    roll_up = pd.Series(
+        np.select(conditions, choices, default=""), 
+        index=roll_up_value.index
+    ) # preserve index
     # Initialize outputs
-    rr = pd.Series(np.nan, index=latest_df.index, dtype="float64")
-    rrdiff = pd.Series(np.nan, index=latest_df.index, dtype="float64")
+    rr = pd.Series(np.nan, index=latest_df.index, dtype="object")
+    rrdiff = pd.Series(np.nan, index=latest_df.index, dtype="object")
 
     # Valid rows (have both prev & next)
     mask_valid = latest_df["Prev"].notna() & latest_df["Next"].notna()
 
     if mask_valid.any():
-        rd = roll_down[mask_valid]
-        ru = roll_up[mask_valid]
+        rd = roll_down_value[mask_valid]
+        ru = roll_up_value[mask_valid]
         abs_rd, abs_ru = rd.abs(), ru.abs()
 
         # Valley
-        is_valley = (rd < 0) & (ru <= 0)
-        rr.loc[is_valley.index[is_valley]] = 99
-        rrdiff.loc[is_valley.index[is_valley]] = np.minimum(abs_rd[is_valley], abs_ru[is_valley])
+        is_valley = (rd > 0) & (ru >= 0)
+        rr.loc[is_valley.index[is_valley]] = "▲99"
+        rrdiff.loc[is_valley.index[is_valley]] = "▲" + np.minimum(abs_rd[is_valley], abs_ru[is_valley]).round(1).astype(str)
 
         # Peak
-        is_peak = (rd > 0) & (ru >= 0)
-        rr.loc[is_peak.index[is_peak]] = -99
-        rrdiff.loc[is_peak.index[is_peak]] = -np.minimum(abs_rd[is_peak], abs_ru[is_peak])
+        is_peak = (rd < 0) & (ru <= 0)
+        rr.loc[is_peak.index[is_peak]] =  "▼99"
+        rrdiff.loc[is_peak.index[is_peak]] = "▼"+ np.minimum(abs_rd[is_peak], abs_ru[is_peak]).round(1).astype(str)
 
         # Mixed
         is_mixed = ~(is_valley | is_peak)
@@ -235,13 +267,13 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> tuple[pd.DataFrame, 
             # Arrow sign
             arrow = np.where(
                 abs_rd_m > abs_ru_m,
-                np.where(rd_m > 0, -1, 1),
-                np.where(ru_m > 0, -1, 1),
+                np.where(rd_m > 0, "▲", "▼"),
+                np.where(ru_m > 0, "▲", "▼"),
             )
 
             # RR diff
-            diff_val = (abs_rd_m - abs_ru_m).abs() * arrow
-            rrdiff.loc[rd_m.index] = diff_val
+            diff_val = (abs_rd_m - abs_ru_m).abs().round(1).astype(str)
+            rrdiff.loc[rd_m.index] = np.core.defchararray.add(arrow, diff_val)
 
             # Risk/reward ratio
             with np.errstate(divide="ignore", invalid="ignore"):
@@ -250,7 +282,7 @@ def compute_risk_reward_roll_df(latest_df: pd.DataFrame) -> tuple[pd.DataFrame, 
                     99,
                     np.minimum(99, np.maximum(abs_rd_m, abs_ru_m) / np.minimum(abs_rd_m, abs_ru_m))
                 )
-            rr.loc[rd_m.index] = ratio * arrow
+            rr.loc[rd_m.index] = np.core.defchararray.add(arrow, np.abs(ratio).round(1).astype(str))
 
     # Helper to return aligned DataFrames
     def make_df(series):
@@ -587,98 +619,6 @@ def generate_heatmap(rounding, layer_df):
     return fig
 
 
-# def generate_heatmap2(rounding, layer_df): #initial value populating
-#     structure_order = layer_df.index.get_level_values('Structure').unique().tolist()
-#     contract_order = layer_df.index.get_level_values('Contract').unique().tolist()
-
-#     # 2. Convert MultiIndex Series to 2D DataFrame
-#     df_2d = layer_df.unstack(level=0)['Value']
-#     df_2d = df_2d.reindex(index=contract_order, columns=structure_order)
-
-#     # 3. Prepare axes labels and data matrix
-#     x_labels = df_2d.columns.tolist()              # Structures (x-axis)
-#     y_labels = df_2d.index.tolist()[::-1]          # Contracts (y-axis, reversed)
-#     z = df_2d.values[::-1]                        # Matrix (rows reversed)
-
-#     # 5. Plot using Plotly (no side color panel)
-#     fig = go.Figure(
-#         data=go.Heatmap(
-#             z=z,
-#             x=x_labels,
-#             y=y_labels,
-#             colorscale = custom_colorscale,
-#             showscale=False     # Hides the side color panel
-#         )
-#     )
-#     fig.update_layout(
-#         # height=500,
-#         plot_bgcolor='lightgray',  # inside axes
-#         xaxis=dict(side='top', showgrid=False,fixedrange=True, tickfont=dict(size=14, family="Orbitron", color="black")),
-#         yaxis=dict(side='top',showgrid= False, fixedrange=True, tickfont=dict(size=14, family="Orbitron", color="black")),
-#         height=800,
-#         margin=dict(l=5, r=5, t=5, b=5),
-#     )
-#     x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
-#     for x_line in x_coordinate_for_line:
-#         if x_line < len(x_labels)-1:
-#             fig.add_vline(
-#                 x=x_line,
-#                 line_width=1.5,
-#                 line_dash="solid",
-#                 line_color="white",
-#                 # annotation_text="Key Event", # Optional: add a label to the line
-#                 # annotation_position="top right"
-#             )
-
-#     y_coordinate_for_line= {4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5}
-#     for y_line in y_coordinate_for_line:
-#         if y_line < len(y_labels)-1:
-#             fig.add_hline(
-#                 y= len(y_labels)-y_line,
-#                 line_width=1.5,
-#                 line_dash="solid",
-#                 line_color="white",
-#                 # annotation_text="Key Event", # Optional: add a label to the line
-#                 # annotation_position="top right"
-#             )
-    
-#     vline_segments = [
-#         (-0.5, 3.5, 'grey'),
-#         (3.5, 7.5, 'red'),
-#         (7.5, 11.5, 'green'),
-#         (11.5, 15.5, 'blue'),
-#         (15.5, 19.5, 'gold'),
-#         (19.5, 23.5, 'purple'),
-#         (23.5, 27.5, 'orange'),
-#         (27.5, 31.5, 'pink'),
-#     ]
-#     # Add each segment as a separate shape at x = 0
-#     y_max = len(y_labels) - 1
-#     for y0, y1, color in vline_segments:
-#         yf = min(y1, y_max + 0.5)  # allow up to the midpoint after last y-label
-#         if y0 > y_max + 0.5:
-#             break
-#         fig.add_shape(
-#             type='line',
-#             x0= -0.5, x1= -0.5,
-#             y0= y_max - y0,
-#             y1= y_max - yf,
-#             line=dict(color=color, width=2.5),
-#             layer='above'
-#         )
-
-#     # 4. annotation text for each cell
-#     text = [[f"{val:.{rounding}f}" if not np.isnan(val) else "" for val in row] for row in z]
-#     fig.update_traces(
-#         text=text,
-#         texttemplate="%{text}",
-#         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
-#         # textfont=dict(
-#         #    # size=18,  # Set the font size
-#         #     family="Orbitron"
-#         #  )
-#     )
-#     return fig
 
 
 def create_blank_heatmap(layer_df):
@@ -696,7 +636,7 @@ def create_blank_heatmap(layer_df):
         text= text_empty,
         #hoverinfo="text",
         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>",
-        colorscale="lightgray",  # Initial dummy
+        colorscale=[[0, "red"], [1, "green"]],  # Initial dummy
         showscale=False
         )
     )
@@ -859,9 +799,11 @@ def hovertemplate_heatmap(heatmap, latest_df, roll_down_df, roll_up_df, percenti
                 cell_info = []
                 for name, df in processed_dfs.items():
                     value = df.loc[contract, structure]
-                    if pd.notna(value):
-                        # Format each factor on a new line
-                        cell_info.append(f"{name}: {value:.1f}")
+                    if pd.notna(value) and value != "":
+                        try:
+                            cell_info.append(f"{name}: {float(value):.1f}")
+                        except (ValueError, TypeError):
+                            cell_info.append(f"{name}: {value}")  
 
                 # Join all factors with an HTML line break
                 row_texts.append("<br>".join(cell_info))
@@ -974,12 +916,58 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
     rank= get_rank(series, latest_val)
     min_val= series.min()
     max_val= series.max() 
-    roll_down= latest_val- prev_val if prev_val is not None else None
-    roll_up= latest_val- next_val if next_val is not None else None
-    risk_reward_diff= (next_val- latest_val) - (latest_val- prev_val) if prev_val is not None and next_val is not None else None
-    risk_reward_ratio = None
-    if roll_up is not None and roll_up != 0:
-        risk_reward_ratio = roll_down / roll_up if roll_down is not None else None
+    roll_down_val=  prev_val-latest_val if prev_val is not None else None
+    if(roll_down_val is not None):
+        rd= f"▼{abs(roll_down_val):.1f}" if roll_down_val < 0 else f"▲{abs(roll_down_val):.1f}" if roll_down_val > 0 else ''
+    roll_up_val=  next_val-latest_val if next_val is not None else None
+    if(roll_up_val is not None):
+        ru= f"▼{abs(roll_up_val):.1f}" if roll_up_val < 0 else f"▲{abs(roll_up_val):.1f}" if roll_up_val > 0 else ''
+    
+    # Determine if it's a peak or a valley in the forward curve
+    if pd.isna(roll_down_val) or pd.isna(roll_up_val):
+        risk_reward_diff_val = None
+        risk_reward_ratio_val = None
+        arrow= ''
+    else:
+        abs_rd = abs(roll_down_val)
+        abs_ru = abs(roll_up_val)
+        # Determine if it's a peak or a valley in the forward curve
+        is_valley = (roll_down_val > 0 and roll_up_val >= 0)
+        is_peak = (roll_down_val < 0 and roll_up_val <= 0)
+        # Case 1: Peak or Valley
+        if is_valley:
+            risk_reward_diff_val = min(abs_rd, abs_ru)
+            risk_reward_ratio_val = 99
+            arrow = '⬆'
+        elif is_peak:
+            risk_reward_diff_val = min(abs_rd, abs_ru)
+            risk_reward_ratio_val = 99
+            arrow = '⬇'
+        else:
+            # Avoid division by zero
+            if abs_rd > abs_ru:
+                    arrow = '⬇' if roll_down_val < 0 else '⬆'
+            else:
+                arrow = '⬇' if roll_up_val < 0 else '⬆'
+            risk_reward_diff_val = abs(abs_rd - abs_ru)
+            
+            if (abs_rd== 0) & (abs_ru== 0):
+                risk_reward_ratio_val = 0
+            elif (abs_rd == 0) | (abs_ru == 0):
+                risk_reward_ratio_val = 99 if abs_ru+abs_ru > 0 else -99
+            else:
+                risk_reward_ratio_val = min(99, max(abs_rd, abs_ru) / min(abs_rd, abs_ru))
+                
+
+    if risk_reward_ratio_val is not None:
+        risk_reward_ratio = f"{arrow}{risk_reward_ratio_val:.1f}"
+    else:
+        risk_reward_ratio = None
+    if risk_reward_diff_val is not None:
+        risk_reward_diff = f"{arrow}{risk_reward_diff_val:.1f}"
+    else:
+        risk_reward_diff = None     
+
 
     std_dev= series.std()
     mean = series.mean()
@@ -1044,12 +1032,12 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
         dbc.Row([
              dbc.Col(dbc.Card(dbc.CardBody([
                 html.P("Roll Dn", className="text-muted small mb-0"),
-                html.H5(f"{roll_down:.1f}" if roll_down is not None else "N/A")
+                html.H5(f"{rd}" if roll_down_val is not None else "N/A")
             ])), width=6),
             
             dbc.Col(dbc.Card(dbc.CardBody([
                 html.P("Roll Up", className="text-muted small mb-0"),
-                html.H5(f"{roll_up:.1f}" if roll_up is not None else "N/A")
+                html.H5(f"{ru}" if roll_up_val is not None else "N/A")
             ])), width=6),
         ], className="g-2 mt-2"),
 
@@ -1062,8 +1050,8 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
             dbc.ListGroupItem([html.Span("Std Dev", className="fw"), html.Span(f"{std_dev:.1f}" if std_dev is not None else "N/A", className="float-end")]),
             dbc.ListGroupItem([html.Span("Median", className="fw"), html.Span(f"{median:.1f}" if median is not None else "N/A", className="float-end")]),
             dbc.ListGroupItem([html.Span("Mean", className="fw"), html.Span(f"{mean:.1f}" if mean is not None else "N/A", className="float-end")]),
-            dbc.ListGroupItem([html.Span("Risk/Reward Diff", className="fw"), html.Span(f"{risk_reward_diff:.1f}" if risk_reward_diff is not None else "N/A", className="float-end")]),
-            dbc.ListGroupItem([html.Span("Risk/Reward Ratio", className="fw"), html.Span(f"{risk_reward_ratio:.1f}" if risk_reward_ratio is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Risk/Reward Diff", className="fw"), html.Span(f"{risk_reward_diff}" if risk_reward_diff is not None else "N/A", className="float-end")]),
+            dbc.ListGroupItem([html.Span("Risk/Reward Ratio", className="fw"), html.Span(f"{risk_reward_ratio}" if risk_reward_ratio is not None else "N/A", className="float-end")]),
             dbc.ListGroupItem([html.Span("Range Span", className="fw"), html.Span(f"{range_span:.1f}" if range_span is not None else "N/A", className="float-end")]),
             # dbc.ListGroupItem([html.Span("Max Value", className="fw"), html.Span(f"{max_val:.2f}" if max_val is not None else "N/A", className="float-end")]),
             # dbc.ListGroupItem([html.Span("Min Value", className="fw"), html.Span(f"{min_val:.2f}" if min_val is not None else "N/A", className="float-end")]),

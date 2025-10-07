@@ -182,13 +182,13 @@ def get_kde_controls():
 
                     html.Div([
                         html.Label("Hike Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                        dcc.Input(id="hike-threshold-input", type="number", value=50, step=10, debounce=True,
+                        dcc.Input(id="hike-threshold-input", type="number", value=50, step=5, debounce=True,
                                 className="form-control form-control-sm", style={"width": "32%"})
                     ], className="d-flex justify-content-between mb-2"),
 
                     html.Div([
                         html.Label("Ease Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                        dcc.Input(id="ease-threshold-input", type="number", value=-50, step=10, debounce=True,
+                        dcc.Input(id="ease-threshold-input", type="number", value=-50, step=5, debounce=True,
                                 className="form-control form-control-sm", style={"width": "32%"})
                     ], className="d-flex justify-content-between mb-1")
 
@@ -226,7 +226,7 @@ def get_kde_controls():
 
         html.Div([
             html.Label("Local Win", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=2, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
+            dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
         ], className=" px-3 mb-2 hidden-row", id="kde-local-row"),
 
         html.Div([
@@ -236,7 +236,7 @@ def get_kde_controls():
 
         html.Div([
             html.Label("% Line", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-pc-line-shared", type="number", value=95, min=0, max=100, step=5, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
+            dcc.Input(id="kde-pc-line-shared", type="number", value=95, min=0, max=100, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
         ], className=" px-3 mb-2 hidden-row", id="kde-pc-row")
 
     ], className="control-panel-1")
@@ -272,6 +272,7 @@ default_2_2_2_3 = {
     "btn-2yr": False,
     "btn-5yr": False,
     "btn-10yr": False,
+    "btn-2y10y":False,
 
     "btn-ease_hike_3twin": True,   # e.g. default ON
     "btn-nth_out_3twin": False,
@@ -284,6 +285,7 @@ default_2_2_2_3 = {
     "btn-2yr_3twin": False,
     "btn-5yr_3twin": False,
     "btn-10yr_3twin": False,
+    "btn-2y10y_3twin":False,
 }
 
 tab_2_2_2_3_button_ids = list(default_2_2_2_3.keys())
@@ -364,7 +366,7 @@ app.layout = dbc.Container([
         ]),
         dbc.Col([
             html.Label("Lookback Period", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=10, className='form-control')
+            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=1, className='form-control')
         ]),
         dbc.Col([
             html.Label(" "),
@@ -437,12 +439,12 @@ app.layout = dbc.Container([
                             dbc.Stack([
                                 dbc.Row([
                                     dbc.Col(dbc.Label("Local win"), width=6),
-                                    dbc.Col(dbc.Input(id="win-local", type="number", value=21, min=1, step=5, debounce=True), width=6)
+                                    dbc.Col(dbc.Input(id="win-local", type="number", value=21, min=1, step=1, debounce=True), width=6)
                                 ], id="win-local-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
                                     dbc.Col(dbc.Label("Settle offset"), width=7),
-                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=5, debounce=True), width=5)
+                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=1, debounce=True), width=5)
                                 ], id="settle-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
@@ -457,7 +459,7 @@ app.layout = dbc.Container([
 
                                 dbc.Row([
                                     dbc.Col(dbc.Label("Quantile"), width=3),
-                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=5, debounce=True), width=9)
+                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=1, debounce=True), width=9)
                                 ], id="quantile-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
@@ -658,10 +660,10 @@ app.layout = dbc.Container([
                                     build_button_tab7("Price", id="btn-price", active=default_tab7["btn-price"]),
                                     build_button_tab7("Percentile", id="btn-percentile", active=default_tab7["btn-percentile"]),
                                     build_button_tab7("Z Score", id="btn-zscore", active=default_tab7["btn-zscore"]),
-                                    build_button_tab7("RRd diff", id="btn-riskrewarddiff", active=default_tab7["btn-riskrewarddiff"]),
-                                    build_button_tab7("Risk/ Reward", id="btn-riskreward", active=default_tab7["btn-riskreward"]),
                                     build_button_tab7("Roll down", id="btn-rolldown", active=default_tab7["btn-rolldown"]),
                                     build_button_tab7("Roll up", id="btn-rollup", active=default_tab7["btn-rollup"]),
+                                    build_button_tab7("RRd diff", id="btn-riskrewarddiff", active=default_tab7["btn-riskrewarddiff"]),
+                                    build_button_tab7("Risk/ Reward", id="btn-riskreward", active=default_tab7["btn-riskreward"]),
                                     build_button_tab7("Range", id="btn-range", active=default_tab7["btn-range"]),
                                     build_button_tab7("Trend", id="btn-trend", active=default_tab7["btn-trend"]),
                                     build_button_tab7("OI", id="btn-oi", active=default_tab7["btn-oi"]),
@@ -765,7 +767,8 @@ dcc.Tab(
                             build_button("EFFR", id="btn-effr",active=default_2_2_2_3["btn-effr"]),
                             build_button("2 Yr", id="btn-2yr",active=default_2_2_2_3["btn-2yr"]),
                             build_button("5 Yr", id="btn-5yr",active=default_2_2_2_3["btn-5yr"]),
-                            build_button("10 Yr", id="btn-10yr",active=default_2_2_2_3["btn-10yr"]),
+                            build_button("10 Yr", id="btn-10yr",active=default_2_2_2_3["btn-10yr"]), #
+                            build_button("2y10y", id="btn-2y10y",active=default_2_2_2_3["btn-2y10y"]),
                         ],
                         style={
                             'display': 'flex',
@@ -817,6 +820,7 @@ dcc.Tab(
                             build_button("2 Yr", id="btn-2yr_3twin",active=default_2_2_2_3["btn-2yr_3twin"]),
                             build_button("5 Yr", id="btn-5yr_3twin",active=default_2_2_2_3["btn-5yr_3twin"]),
                             build_button("10 Yr", id="btn-10yr_3twin",active=default_2_2_2_3["btn-10yr_3twin"]),
+                            build_button("2y10y", id="btn-2y10y_3twin",active=default_2_2_2_3["btn-2y10y_3twin"]),
                         ],
                         style={
                             'display': 'flex',
@@ -949,7 +953,8 @@ footer_component,
     dcc.Store(id='general-store', data=[default_comdty, "L6", 8, DEFAULT_LOOKBACK], storage_type='session'),
     dcc.Store(id='structure-data-store', storage_type='session'),
     dcc.Store(id='final-mainseriesonly-store', storage_type='session'),
-    dcc.Store(id='cycle-store',storage_type='session' )#persistence=Tru
+    dcc.Store(id="shared-xrange_2_1_2_2"),   # hidden storage for sync
+    dcc.Store(id='cycle-store',storage_type='session' ),#persistence=Tru
 
 
 ], fluid=True)  # ← close Container here
@@ -1329,7 +1334,7 @@ def table_1_2_callback(str_data, curve_len,str_name, str_number,  win_local, gen
 # # ---------------------------------------------------------------------------------------------------------------------------------------
 
 @app.callback(
-    Output('chart-plot', 'figure'),
+    Output('chart-plot', 'figure', allow_duplicate=True),
     Input('final-mainseriesonly-store', 'data'),
     State('general-store', 'data'),
     prevent_initial_call=True
@@ -1385,7 +1390,7 @@ def update_classnames(store):
 
 
 @app.callback(
-    [Output('sum-of-eases-plot', 'figure'),
+    [Output('sum-of-eases-plot', 'figure', allow_duplicate=True),
     Output('scatter_plot_2_3', 'figure')],
     [Input('raw-data-store', 'data'),
     State('general-store', 'data'),
@@ -1482,7 +1487,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         add_chart_2_2(fig2_2, series_data, corr, legend="sum of eases/ hikes", color="#4363d8")
 
     # 2. Treasury rates (fetch data only once)
-    treasury_buttons = {"btn-effr", "btn-2yr", "btn-5yr", "btn-10yr"}
+    treasury_buttons = {"btn-effr", "btn-2yr", "btn-5yr", "btn-10yr", "btn-2y10y"}
     if any(toggle_store.get(btn) for btn in treasury_buttons):
         df_rates = fetch_rates_cycle(filepath="SR3_ED.xlsm", sheetname="treasuries rates", lookback_prd=lookback_prd)
         
@@ -1490,7 +1495,8 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
             "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "black"},
             "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#5c2791"},
             "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#7a9900"},
-            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#b04141"}
+            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#b04141"},
+            "btn-2y10y": {"label": "2y10y", "legend": "2y10y", "color": "#8c564b"},
         }
 
         for btn, params in treasury_map.items():
@@ -1516,9 +1522,43 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
 
 
 
+# #######################################3 syncing x-axis of fig 2_2 and fig 2_3 ###############
+# # --- 1. Helper Function for Synchronization ---
+# def sync_x_axis(relayout_data, current_figure):
+#     if not relayout_data or 'xaxis.range[0]' not in relayout_data: # Guard clause: Do nothing if there's no relayoutData or it's not a zoom/pan event
+#         return no_update
+
+#     new_x_range = [relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']]
+#     if 'xaxis' in current_figure['layout'] and 'range' in current_figure['layout']['xaxis']: # Check if the target figure's x-axis range is already the same to prevent circular updates
+#         current_x_range = current_figure['layout']['xaxis']['range']
+#         if current_x_range == new_x_range:
+#             return no_update
+
+#     # Create a new figure object to avoid modifying the original state directly
+#     fig = go.Figure(data=current_figure['data'], layout=current_figure['layout'])
+#     fig.update_layout(xaxis_range=new_x_range)   # Update the x-axis range
+#     return fig
+
+# #syncing
+#     # --- 4. Refactored Callbacks ---
+# @app.callback(
+#     Output('chart-plot', 'figure', allow_duplicate=True),
+#     Input('sum-of-eases-plot', 'relayoutData'),
+#     State('chart-plot', 'figure'),
+#     prevent_initial_call=True
+# )
+# def sync_chart_plot_from_sum_eases(relayout_data, current_figure):
+#     return sync_x_axis(relayout_data, current_figure)
 
 
-
+# @app.callback(
+#     Output('sum-of-eases-plot', 'figure', allow_duplicate=True),
+#     Input('chart-plot', 'relayoutData'),
+#     State('sum-of-eases-plot', 'figure'),
+#     prevent_initial_call=True
+# )
+# def sync_sum_eases_from_chart_plot(relayout_data, current_figure):
+#     return sync_x_axis(relayout_data, current_figure)
 
 
 # # ---------------------------------------------------------------------------------------------------------

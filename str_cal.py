@@ -670,6 +670,8 @@ def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lo
     # final data container
     rates_df= df.iloc[[3,9,15,21]].copy()  # 2Yr, 5Yr, 10Yr, rates
     rates_df.index = ["2Yr", "5Yr", "10Yr", "Rates"]
+    y2y10= (df.iloc[3]- df.iloc[15])*100
+    rates_df.loc['2y10y'] = y2y10
     rates_df.columns= dates
     for i in range(len(rates_df) - 1): # passing all except rates row
         rates_df.iloc[i]= rolling_bounds_filter(rates_df.iloc[i], window=21, k=DEFAULT_OUTLIER_K)

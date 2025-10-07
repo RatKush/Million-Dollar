@@ -242,10 +242,12 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
         """Snap a datetime to nearest valid index value if not present."""
         if dt is None:
             return None
-        if dt not in str_df.index:
+        if dt not in raw_df.index:
             try:
-                nearest_idx = str_df.index.get_indexer([dt], method="nearest")[0]
-                snapped = str_df.index[nearest_idx]
+                sorted_idx = raw_df.index.sort_values()
+                #print(sorted_idx[:-100])
+                nearest_idx = sorted_idx.get_indexer([dt], method="nearest")[0]
+                snapped = sorted_idx[nearest_idx]
                 logging.warning(f"{dt} not in index, snapped to {snapped}")
                 return snapped
             except Exception:
@@ -266,7 +268,6 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     # ---------- Dates ----------
     date1 = snap_to_index(safe_parse_date(date1))
     date2 = snap_to_index(safe_parse_date(date2))
-
     # ---------- Plotting flags ----------
     #
     if plot_flags.get("Settle") and Settle is not None:
@@ -283,12 +284,12 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     if plot_flags.get("Date1") and date1 is not None:
         leg = date1.strftime("%Y-%m-%d")
         date_curve= curve_at_datex(raw_df.loc[date1], comdty, str_name, curve_len)
-        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "grey"},show_values=0)
+        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "darkgreen"},show_values=0)
 
     if plot_flags.get("Date2") and date2 is not None:
         leg = date2.strftime("%Y-%m-%d")
         date_curve= curve_at_datex(raw_df.loc[date2], comdty, str_name, curve_len)
-        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "darkgrey"},show_values=0)
+        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "#3a3a3a"},show_values=0)
 
     # ---------- Studies ----------
     if plot_flags.get("MA"):
@@ -855,11 +856,11 @@ def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #pur
         font=dict(size=10, color="grey")
     )
     #print(corr["mean_rolling_correlation"], corr["distance_correlation"])
-    if corr['mean_rolling_correlation'] is not None:
+    if corr['pearson'] is not None:
         fig.add_annotation(
             x=latest_x,
             y=y0,
-            text=f"Corr: ({round(corr['mean_rolling_correlation'],1)})",
+            text=f"Corr: ({round(corr['pearson'],1)})",
             showarrow=False,
             xshift=5,
             yshift= 15,
@@ -955,6 +956,9 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
     rolling_corr = series1.rolling(window=rolling_window).corr(series2)
     # The first (window - 1) values will be NaN, so we drop them before calculating the mean.
     mean_rolling_corr = rolling_corr.dropna().mean()
+    #pearson_correlation
+    pearson = series1.corr(series2)
+
 
     # # --- 3. Distance Correlation (dCor) ---
     # # dCor is powerful because it is zero if and only if the series are truly independent.
@@ -963,8 +967,9 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
     dist_corr=0
 
     return {
+        'pearson': pearson, 
         'mean_rolling_correlation': mean_rolling_corr,
-        'distance_correlation': dist_corr
+        'distance_correlation': dist_corr,
     }
 
 
