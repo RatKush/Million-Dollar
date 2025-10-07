@@ -220,4 +220,34 @@ div.tab--selected:hover {
     margin-top: 17px;
 }
 
+/* ============================ Simple reusable panel styles ============================ */
+/* Used to lightly beautify sections on Tab 1 without over-engineering */
+.panel-card {
+    background-color: #2b2e35;
+    color: #c0c4cc;
+    border: 1px solid #3a3f4b;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.panel-title {
+    color: #c0c4cc;
+    font-weight: 500;
+    font-size: 16px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #3a3f4b;
+    margin: 0;
+    text-align: center;
+}
+
+/* Avoid double-styling inside panel for checklist group */
+.panel-card .control-panel-1 {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 8px 0;
+    margin-bottom: 8px;
+}
+
 
