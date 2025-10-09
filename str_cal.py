@@ -33,6 +33,31 @@ COMMODITY_MAPPING = {
     "vol": "VIX", "vix vs voxx": "VIX-VOXX","vix voxx": "VIX-VOXX", "vix vs vstoxx": "VIX-VOXX", "vix vstoxx": "VIX-VOXX"
 }
 
+def get_excel_files(SUPPORTED_EXCEL_EXTENSIONS, directory_path: str = '.') -> list[str]:
+    try:
+        if not os.path.exists(directory_path):
+            raise OSError(f"Directory does not exist: {directory_path}")
+
+        if not os.path.isdir(directory_path):
+            raise OSError(f"Path is not a directory: {directory_path}")
+
+        excel_files = [
+            filename for filename in os.listdir(directory_path) 
+            if filename.lower().endswith(SUPPORTED_EXCEL_EXTENSIONS)
+        ]
+
+        return sorted(excel_files)  # Return sorted list for consistency
+
+    except OSError as e:
+        print(f"Error accessing directory {directory_path}: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error in get_excel_files: {e}")
+        return []
+
+
+
+
 
 def extract_comdty(filepath: str) -> str:
     """Extract commodity identifier from filepath using fuzzy string matching."""

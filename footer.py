@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 import os
 
+
 sample_notes = ["Short EDZ5 vs EDM6", "Long SFRH5 vs SFRM5"]
 
 footer_component = html.Footer([
