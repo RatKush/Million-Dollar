@@ -4,6 +4,7 @@ Million Dollar Futures Dashboard
 An interactive dashboard to analyze futures structures for SOFR / SONIA / Euribor / CoRRA / ESTR / EFFR / EMP / NPC / VIX / FVS.
 
 Key features include:
+
 #1. Curve views: forward curve and its analysis corresponding to many quoted i.e. spread(3mo, 6mo, 12mo), Butterfly (3mo, 6mo, 12mo) and Double fly (3mo, 6mo, 12mo) as well as non quoted ratios such as differance of consecutive flies or in ratio such as 1:2 or 2:3 
 
 #2. Fut chain one sight view with filter and sorting customisable of strucutres along with all related matrics of interest i.e. percentile rank, Z  score , roll down and roll up, range, Sparkline, daily changes histogram, and many other statistical matrics.
@@ -30,7 +31,7 @@ Modular Python scripts for easier maintenance
 
 Easy to run locally
 
-📁 <img width="416" height="199" alt="image" src="https://github.com/user-attachments/assets/b15a8711-3018-4fab-ada3-9faa7b7a5ec3" />
+<img width="416" height="199" alt="image" src="https://github.com/user-attachments/assets/b15a8711-3018-4fab-ada3-9faa7b7a5ec3" />
 
 
 🛠️ Prerequisites
