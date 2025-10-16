@@ -16,42 +16,115 @@ On click any cell will give you all the general inforamtion of the clicked contr
 Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience.
 ---
 
-🚀 How to Run Locally
+Million Dollar Dashboard
 
-1. Setup Instructions
-Ensure dashboard.py, requirements.txt,other python scripts and your excel data file (e.g., SR3.xlsx) are in the same directory.
+A Python-based interactive dashboard built using Dash for visualizing and analyzing data from Excel files.
 
-1a. Download ZIP from https://github.com/RatKush/Million-Dollar/tree/downloadable repo and extract all and save in a folder
-1b. Download python in your system, if already installed then leave this step
-1c. Install Dependencies 
-	copy path of requirements.txt
-	go to terminal i> for windows "pip install -r path_to_requirements_txt" ii> for macos "pip3 install -r path_to_requirements_txt"
-1d. Open folder in VS Code and click on Run button on dashboard.py file in VS Code/ any other IDE OR 
-	in VS Code terminal write "python dashboard.py" and hit enter/return OR
-	go to terminal and write "cd path_to_million_dollar_folder_where_you_saved" then enter then "python dashboard.py"
+🚀 Features
 
-1e. Open in Browser:
-	you must get this output in terminal:
-	Dash is running on http://127.0.0.1:8050/ OR may be any other port i.e. 8060 
-	Click on the url or just copy paste in you browser 
+Interactive plots and tables
 
----
+Works directly with Excel data (SR3.xlsx)
 
-📁 File Structure
+Modular Python scripts for easier maintenance
 
-project_folder/
+Easy to run locally
+
+📁 Project Structure
+Million-Dollar/
 │
-├── dashboard.py
-├── requirements.txt
-├── other python scripts
-├── SR3.xlsx  ← (or your own dataset)
+├── dashboard.py            # Main dashboard script
+├── requirements.txt        # Python dependencies
+├── SR3.xlsx                # Sample data file
+├── <other_python_scripts>  # Supporting modules
+└── README.md               # Project documentation
 
----
+🛠️ Prerequisites
 
-📌 Dependencies
+Python 3.8+ installed and accessible in terminal
 
-Make sure you have Python 3.7+ installed.
-Dependencies are listed in requirements.txt
+Pip (Python package installer)
+
+Web browser (Chrome, Edge, Firefox, etc.)
+
+📥 Setup Instructions
+1. Download the Project
+
+Go to the GitHub repository:
+[Million-Dollar Repo](https://github.com/RatKush/Million-Dollar/tree/downloadable)
+
+Download the ZIP and extract all files into a folder.
+
+2. Install Dependencies
+
+Open terminal (Command Prompt on Windows, Terminal on macOS/Linux)
+
+Navigate to the folder where requirements.txt is located (optional if you use combined command)
+
+Run the installation command:
+
+Windows:
+
+pip install -r "C:\path\to\requirements.txt"
 
 
+macOS/Linux:
 
+pip3 install -r "/path/to/requirements.txt"
+
+
+This will install all required Python packages to run the dashboard.
+
+3. Run the Dashboard
+
+There are two options:
+
+Option A — Using VS Code:
+
+Open the project folder in VS Code.
+
+Click the Run button on dashboard.py
+OR open the VS Code terminal and type:
+
+python dashboard.py
+
+
+Option B — Using Terminal:
+
+Navigate to your project folder:
+
+cd "path_to_million_dollar_folder_where_you_saved"
+
+
+Run the dashboard:
+
+python dashboard.py
+
+
+💡 Shortcut — combine steps 1 & 2 in one line:
+
+cd "path_to_million_dollar_folder_where_you_saved" && python dashboard.py
+
+4. Open in Browser
+
+After running, you should see output similar to:
+
+Dash is running on http://127.0.0.1:8050/
+
+
+Open this URL in your browser to access the dashboard.
+
+If the port is different (e.g., 8060), use the port shown in the terminal.
+
+⚙️ Notes & Tips
+
+Ensure all scripts and data files are in the same folder.
+
+Use Python 3.8+ to avoid compatibility issues.
+
+If running on macOS/Linux, you may need python3 instead of python.
+
+📝 Contact
+
+For questions or support, reach out to:
+ratkush2023@gmail.com
