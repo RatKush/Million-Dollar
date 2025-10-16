@@ -1,11 +1,8 @@
 # A Dash app to explore structure curve data: Curve view, chart and KDE analysis
-import os
 import time
-import socket
-from typing import Optional, Union, Tuple, Dict, Any
+from typing import Optional, Union, Dict, Any
 import logging
 import pandas as pd
-import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State, ctx, callback, no_update
 from dash.dependencies import ALL
@@ -13,88 +10,38 @@ from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 from flask_caching import Cache
 import plotly.graph_objects as go
-import dash_ag_grid as dag
+
 # 1. THE ENTERPRISE SCRIPT for adding sprakline in table
 external_scripts = ["https://cdn.jsdelivr.net/npm/ag-grid-enterprise/dist/ag-grid-enterprise.min.js"]
-# Data processing and calculations
-from str_cal import (
-    extract_comdty,  process_raw_data, index, get_ratio, fetch_rates_cycle,fn_main_series_only, process_structure_data
+
+# 2. tab wise imports
+from str_cal import  process_raw_data, index, get_ratio, fetch_rates_cycle,fn_main_series_only, process_structure_data, serialize_dataframe, serialize_series
+from tab0_header import create_header_component, get_free_port, extract_comdty, get_excel_files
+from tab1_curve import  create_tab1_view,  generate_curve_plot, table_populating_1_2
+from tab2_curve import (
+    tab_2_2_2_3_button_ids, create_tab2_view,get_button_class, compute_correlation_parameters,plot_single_structure,cal_sum_of_eases_hikes, cal_sum_of_same_sign_meets,
+    Out_tab2_2, S12_tab2_2, L6_tab2_2, add_chart_2_2, plot_chart_2_2, add_chart_2_3, plot_chart_2_3
 )
-
-# Curve plotting and visualization
-from curve_plotter import (
-    plot_single_structure, get_button_class, compute_correlation_parameters, generate_curve_plot, table_populating_1_2,
-    cal_sum_of_eases_hikes, cal_sum_of_same_sign_meets, Out_tab2_2, S12_tab2_2, 
-    L6_tab2_2, add_chart_2_2, plot_chart_2_2, add_chart_2_3, 
-    plot_chart_2_3, build_button
-)
-
-# KDE analysis
-from kde_help import plot_main_kde, classify_cycle, plotted_sub_KDE
-
-# Matrix and heatmap functionality
-from matrix import (
-    build_button_tab7, get_button_class_tab7, generate_heatmap, color_heatmap,
+from tab3456_kde_help import plot_main_kde, classify_cycle, plotted_sub_KDE, create_kde_tab, kde_control_wrapper
+from tab7_matrix import (
+    get_button_class_tab7, generate_heatmap, color_heatmap,
     create_blank_heatmap, compute_3d_structure, compute_percentile_df,compute_zscore_df, compute_range_df,classify_regime_in_series,
     compute_risk_reward_roll_df, hovertemplate_heatmap, generate_heatmap_detail_panel,
-    get_adjacent_values, filter_grey
-)
+    get_adjacent_values, filter_grey, matrix_buttons_price, matrix_buttons_color, create_tab7_view
+) 
+from tab9_footer import footer_component, send_feedback_email
 
-# UI components
-from footer import footer_component, send_feedback_email
-# dashboard.py (top of file)
+# default variables
 DEFAULT_CURVE_LENGTH = 20
 DEFAULT_LOOKBACK = 250
+MIN_DEFAULT_LOOKBACK = 63  # Minimum lookback period
 DEFAULT_WINDOW = 21
 DEFAULT_OUTLIER_K = 2.5
-
-# ------------------------------------------------
-# UTILITY: Read all available Excel files in local directory
-# ------------------------------------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Get available Excel files and setup dropdown options
 SUPPORTED_EXCEL_EXTENSIONS = ('.xlsx', '.xlsm', '.csv')
-DEFAULT_FILES = ["SR3_ED.xlsm", "SR3.xlsx"]
-def get_excel_files(directory_path: str = '.') -> list[str]:
-    try:
-        if not os.path.exists(directory_path):
-            raise OSError(f"Directory does not exist: {directory_path}")
-
-        if not os.path.isdir(directory_path):
-            raise OSError(f"Path is not a directory: {directory_path}")
-
-        excel_files = [
-            filename for filename in os.listdir(directory_path) 
-            if filename.lower().endswith(SUPPORTED_EXCEL_EXTENSIONS)
-        ]
-
-        return sorted(excel_files)  # Return sorted list for consistency
-
-    except OSError as e:
-        print(f"Error accessing directory {directory_path}: {e}")
-        return []
-    except Exception as e:
-        print(f"Unexpected error in get_excel_files: {e}")
-        return []
-
-def get_default_filename_comdty (available_files: list[str]) -> Optional[str]:
-    if not available_files:
-        return None,None
-
-    # Check for preferred files in order of priority
-    for preferred_file in DEFAULT_FILES:
-        if preferred_file in available_files:
-            com= extract_comdty(preferred_file)
-            return preferred_file, com
-
-    # If no preferred files found, return the first available file
-    return available_files[0], extract_comdty(available_files[0])
-
-
-
-
-# ------------------------------------------------remove_outliers
-# DASH APP INITIALIZATION
-# ------------------------------------------------
+DEFAULT_FILES = ["SR3_ED_GEN.xlsm", "SR3.xlsx"]
+DEFAULT_STR_NAME= "L6"
+DEFAULT_STR_NO=8
 # Application configuration
 APP_CONFIG = {
     'title': "Million Dollar",
@@ -104,6 +51,21 @@ APP_CONFIG = {
     'cache_type': 'simple'  # Use 'filesystem' or 'redis' for production
 }
 
+# -------------------------------------------------------------------------------------------------------------------------------------------
+# DASH APP INITIALIZATION
+# ----------------------------------------------------------------------------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def get_default_filename_comdty (available_files: list[str]) -> Optional[str]:
+    if not available_files:
+        return None,None
+
+    # Check for preferred files in order of priority
+    for preferred_file in DEFAULT_FILES:
+        if preferred_file in available_files:
+            com= extract_comdty(preferred_file)
+            return preferred_file, com
+    # If no preferred files found, return the first available file
+    return available_files[0], extract_comdty(available_files[0])
 
 def initialize_app() -> tuple[dash.Dash, Cache]:
     """
@@ -123,893 +85,118 @@ def initialize_app() -> tuple[dash.Dash, Cache]:
         external_stylesheets=[APP_CONFIG['theme']],
         external_scripts=external_scripts
     )
-
     # Configure application properties
     app.title = APP_CONFIG['title']
     app.config.suppress_callback_exceptions = APP_CONFIG['suppress_callback_exceptions']
-
     # Initialize cache system
     # Note: For production, consider using 'filesystem' or 'redis' cache types
     cache = Cache(app.server, config={
         'CACHE_TYPE': APP_CONFIG['cache_type']
     })
-
     return app, cache
 
-
-# Get available Excel files and setup dropdown options
-excel_files = get_excel_files()
+excel_files = get_excel_files(SUPPORTED_EXCEL_EXTENSIONS)
 filename_options = [{'label': filename, 'value': filename} for filename in excel_files]
 default_filename, default_comdty = get_default_filename_comdty(excel_files)
 
-# Initialize Dash application and cache
-app, cache = initialize_app()
-
-
-
-# ##############################shared control panel for all 4 kde plot cntrol tab3---- tab6################################
-def get_kde_controls():
-    return html.Div([
-        html.H5("Plot Controls", style={"color":"#c0c4cc","textAlign": "center", "padding": "8px 16px","backgroundColor": "#2b2e35","fontWeight": "500","fontSize": "16px","border": "1px solid #3a3f4b",  "borderTopLeftRadius": "8px",  "borderTopRightRadius": "8px", "margin": "0"}
-        ),
-
-        # --- Cycle Classification Section (Wide, Cleaner) ---
-            html.Div([
-                html.Div("Cycle Classification", className="fw-bold small px-2 py-1", style={
-                    "backgroundColor": "#1f2128",
-                    "borderBottom": "1px solid #3a3f4b",
-                    "borderTopLeftRadius": "6px",
-                    "borderTopRightRadius": "6px",
-                    "color": "#c0c4cc",
-                    "fontWeight": "500",
-                    "textAlign": "center",
-                    "padding": "8px 16px",
-                }),
-
-                html.Div([
-
-                    html.Div([
-                        html.Label("Base Str", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                        dcc.Input(id="base-str-input", type="text", value="S3", debounce=True, placeholder="S3/L3",
-                                className="form-control form-control-sm", style={"width": "32%"})
-                    ], className="d-flex justify-content-between mb-2"),
-
-                    html.Div([
-                        html.Label("Cons to Sum", className="form-label", style={"width": "70%", "marginBottom": 0}),
-                        dcc.Input(id="sum-first-n-base-input", type="number", value=4, min=1, step=1, debounce=True,
-                                className="form-control form-control-sm", style={"width": "30%"})
-                    ], className="d-flex justify-content-between mb-2"),
-
-                    html.Div([
-                        html.Label("Hike Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                        dcc.Input(id="hike-threshold-input", type="number", value=50, step=5, debounce=True,
-                                className="form-control form-control-sm", style={"width": "32%"})
-                    ], className="d-flex justify-content-between mb-2"),
-
-                    html.Div([
-                        html.Label("Ease Thrshld", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                        dcc.Input(id="ease-threshold-input", type="number", value=-50, step=5, debounce=True,
-                                className="form-control form-control-sm", style={"width": "32%"})
-                    ], className="d-flex justify-content-between mb-1")
-
-                ], style={"padding": "12px 10px 10px 10px"})
-
-            ], style={
-                "border": "1px solid #3a3f4b",
-                "borderRadius": "6px",
-                "backgroundColor": "#2b2e35",
-                "margin": "10px 0 18px 0"
-            }),
-
-
-        dbc.Checklist(
-            id='kde-flags-shared',
-            options=[
-                {"label": "Latest", "value": "Latest"},
-                {"label": "Band 68%", "value": "band68"},
-                {"label": "Band 95%", "value": "band95"},
-                {"label": "mean ± 1σ", "value": "bb1"},
-                {"label": "mean ± 2σ", "value": "bb2"},
-                {"label": "Median", "value": "med"},
-                {"label": "% Line", "value": "pc_line"},
-                {"label": "Val Line", "value": "val_line"},
-                
-            ],
-            value=["Latest","med", "band68", "band95"],
-            switch=True,
-            className="px-3 mb-3"
-        ),
-
-        # html.Div([
-        #     html.Label("Local Win", className="form-label", style={"width": "68%"}),
-        #     dcc.Input(id="kde-local-win-shared", type="number", value=21, min=1, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
-        # ], className=" px-3 mb-2 hidden-row", id="kde-local-row"),
-
-        html.Div([
-            html.Label("Val Line", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-val-line-shared", type="number", value=0, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
-        ], className=" px-3 mb-2 hidden-row", id="kde-val-row"),
-
-        html.Div([
-            html.Label("% Line", className="form-label", style={"width": "68%"}),
-            dcc.Input(id="kde-pc-line-shared", type="number", value=95, min=0, max=100, step=1, debounce=True, className="form-control form-control-sm", style={"width": "32%"})
-        ], className=" px-3 mb-2 hidden-row", id="kde-pc-row")
-
-    ], className="control-panel-1")
-
-
-#wrapper for easy styling and clarity needed to add in layout 
-dbc.Container(
-    id="kde-flags-shared-wrapper",
-    children=get_kde_controls(),
-    className="kde-floating-panel-css",
-    style={"display": "none"}  # Hidden by default
-)
-
-########################################### tab2_2 buttons #################################################
-default_2_2_2_3 = {
-    "btn-ease_hike": True,   # e.g. default ON
-    "btn-nth_out": False,
-    "btn-mid_out": False,
-    "btn-1sts12": False,
-    "btn-nths12": False,
-    "btn-12ths12": False,
-    "btn-nthl6": False,
-    "btn-effr": False,
-    "btn-2yr": False,
-    "btn-5yr": False,
-    "btn-10yr": False,
-    "btn-2y10y":False,
-
-    "btn-ease_hike_3twin": True,   # e.g. default ON
-    "btn-nth_out_3twin": False,
-    "btn-mid_out_3twin": False,
-    "btn-1sts12_3twin": False,
-    "btn-nths12_3twin": False,
-    "btn-12ths12_3twin": False,
-    "btn-nthl6_3twin": False,
-    "btn-effr_3twin": False,
-    "btn-2yr_3twin": False,
-    "btn-5yr_3twin": False,
-    "btn-10yr_3twin": False,
-    "btn-2y10y_3twin":False,
-}
-
-tab_2_2_2_3_button_ids = list(default_2_2_2_3.keys())
-############################################# tab7  buttons ##############################
-
-default_tab7 = {
-    "btn-price": True,
-    "btn-percentile": False,
-    "btn-zscore": False,
-    "btn-riskrewarddiff": False,
-    "btn-riskreward": False,
-    "btn-rolldown": False,
-    "btn-rollup": False,
-    "btn-range": False,
-    "btn-trend": False,
-    "btn-oi": False,
-    "btn-volume": False,
-
-    #"btn-price_2": False,
-    "btn-percentile_2": True,
-    "btn-rank595_2": False,
-    "btn-rank1090_2": False,
-    "btn-zscore_2": False,
-    "btn-riskrewarddiff_2": False,
-    "btn-riskreward_2": False,
-    "btn-rolldown_2": False,
-    "btn-rollup_2": False,
-    "btn-range_2": False,
-    "btn-trend_2": False,
-    "btn-oi_2": False,
-    "btn-volume_2": False,
-}
-
-matrix_buttons_price= [k for k in default_tab7 if not k.endswith("_2")]
-matrix_buttons_color= [k for k in default_tab7 if k.endswith("_2")]
-
-##################################################### app layout #############################################################
-# ------------------------------------------------
-# DASH LAYOUT  my
-# -----------------------------------------------
-# UI layout
+app, cache = initialize_app() # Initialize Dash application and cache
+##################################################### app layout ########################################################################################
 app.layout = dbc.Container([
-    dbc.Row([
-        dbc.Col([
-            html.Label("Filename", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Dropdown(
-                id='filename',
-                options=filename_options,
-                value=default_filename,
-                clearable=False,
-                className='form-control'
-            )
-        ]),
-        dbc.Col([
-            html.Label("Comdty",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Loading(
-                dcc.Input(id='comdty', type='text', value= default_comdty, disabled=True, className='form-control'),
-            type= 'circle'
-            )
-        ]),
-        dbc.Col([
-            html.Label("Structure", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Dropdown(
-                id='str_name',
-                options=index,
-                value="L6",
-                clearable=False,
-                className='form-control'
-            )
-        ]),
-        dbc.Col([
-            html.Label("Curve Length",style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='curve_length', type='number', value=DEFAULT_CURVE_LENGTH, min= 5,  className='form-control')
-        ]),
-        dbc.Col([
-            html.Label("Str Number", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='str_number', type='number', value=8, min=1, className='form-control')
-        ]),
-        dbc.Col([
-            html.Label("Lookback Period", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
-            dcc.Input(id='lookback_prd', type='number', value=DEFAULT_LOOKBACK, min=10, step=5, className='form-control')
-        ]),
-        dbc.Col([
-            html.Label(" "),
-            dbc.Button("Load", id='load-btn', color='primary', className='mt-4')
-        ])
-    ], className='mb-4'),
-
-
-####################### kde -control for tab3, tab4, tab5, tab6--- needto declare beffore tabs declation#######################
-    dbc.Container(
-        id="kde-flags-shared-wrapper",
-        children=get_kde_controls(),
-        className="my-2",
-        style={"display": "none"}  # Hidden by default
-    ),
-
-  
+    create_header_component(filename_options, default_filename, default_comdty, DEFAULT_CURVE_LENGTH, DEFAULT_LOOKBACK, index),
 ####################################################################### tab 1 ###################################################
     dcc.Tabs(id="tabs", value='tab1', children=[
-        dcc.Tab(label='Curve View', value='tab1',
+        create_tab1_view(),
+############################################################# tab 7 ################################################################        
+        create_tab7_view(DEFAULT_CURVE_LENGTH),
+###################################################  tab 2 ##############################################################################
+        create_tab2_view(),
+######################################################## tab3 #############################################################
+        create_kde_tab("KDE", "tab3", "loading-kde", 'kde-plot'),
+        create_kde_tab("KDE (Hike Cycle)", 'tab4', "loading-hike-kde", 'hike-kde-plot'),
+        create_kde_tab("KDE (Ease Cycle)", 'tab5', "ease-loading-kde", 'ease-kde-plot'),
+        create_kde_tab("KDE (Side Ways)", 'tab6', "side-loading-kde", 'side-kde-plot'),   
+################################################################# tab 8 ###################################################
+        dcc.Tab(label='Snapshot', value='tab8',
             style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
             },
             selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
             },
-            children=[
-                dbc.Row([
-                    dbc.Col(dcc.Loading(
-                        id="loading-curve",
-                        type="circle",
-                        children=html.Div(dcc.Graph(id='curve-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-1 my-2 rounded")
-                        ), width=10
-                    ),
-                    dbc.Col([
-                        html.Div([
-                            html.H5(
-                                "Plot Controls",
-                                style={
-                                    "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
-                                    "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
-                                    "borderBottom": "1px solid #3a3f4b", "margin": "0"
-                                }
-                            ),
-
-                            dbc.Checklist(
-                                id='plot-flags',
-                                options=[
-                                    {"label": "Latest", "value": "Latest"},
-                                    {"label": "Settle", "value": "Settle"},
-                                    {"label": "Date1", "value": "Date1"},
-                                    {"label": "Date2", "value": "Date2"},
-                                    {"label": "MA", "value": "MA"},
-                                    {"label": "Median", "value": "MED"},
-                                    {"label": "Quantile Series", "value": "quant_ser"},
-                                    {"label": "Bollinger Band", "value": "BB"},
-                                    {"label": "XN", "value": "XN"}
-                                ],
-                                value=["Latest", "Settle", "XN"],
-                                switch=True,
-                                className="control-panel-1"
-                            ),
-
-                            dbc.Stack([
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("Local win"), width=6),
-                                    dbc.Col(dbc.Input(id="win-local", type="number", value=21, min=1, step=1, debounce=True), width=6)
-                                ], id="win-local-row", className="mb-2", style={"display": "none"}),
-
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("Settle offset"), width=6),
-                                    dbc.Col(dbc.Input(id="Settle_days-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
-                                ], id="settle-row", className="mb-2", style={"display": "none"}),
-
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("Date 1"), width=4),
-                                    dbc.Col(dbc.Input(id="date1-input", type="date", value="2025-06-05"), width=8)
-                                ], id="date1-row", className="mb-2", style={"display": "none"}),
-
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("Date 2"), width=4),
-                                    dbc.Col(dbc.Input(id="date2-input", type="date", value="2024-09-25"), width=8)
-                                ], id="date2-row", className="mb-2", style={"display": "none"}),
-
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("Quantile"), width=6),
-                                    dbc.Col(dbc.Input(id="quantile-input", type="number", value=95, min=0, max=100, step=1, debounce=True), width=6)
-                                ], id="quantile-row", className="mb-2", style={"display": "none"}),
-
-                                dbc.Row([
-                                    dbc.Col(dbc.Label("BB Std Dev"), width=6),
-                                    dbc.Col(dbc.Input(id="bb-std-input", type="number", value=1, min=1, step=1, debounce=True), width=6)
-                                ], id="bb-std-row", className="mb-2", style={"display": "none"}),
-
-                            ], gap=1)
-                        ],
-
-                        style={
-                            "border": "1px solid #3a3f4b",
-                            "borderRadius": "8px",
-                            "backgroundColor": "#2b2e35",
-                            "padding": "10px",
-                            "marginTop": "5px"
-                        })
-                    ], width=2, style={"paddingLeft": "0px", "marginTop": "2px"})
-                ]),
-            #]),
-                # --- NEW ROW 2: SORTABLE TABLE ---  ###### table ############################################
-                dbc.Row([
-                    dbc.Col(dcc.Loading(
-                        id="loading-table",
-                        type="circle",
-                        children=html.Div(  # <-- Wrap AgGrid
-                            dag.AgGrid(
-                                id='contracts-table',
-                                className="ag-theme-alpine-dark top-scroll",
-                                columnDefs=[],            # set columns later
-                                rowData=[],               # will be provided by callback
-                                defaultColDef={"sortable": True, "resizable": True, "filter": True},
-                                columnSize="autoSize", # "sizeToFit", "autoSize", "responsiveSizeToFit", 
-                                dashGridOptions={"pagination": False, "domLayout": "autoHeight" },  # 👈 makes grid height fit content
-                                enableEnterpriseModules=True,#sparline
-                                style={"width": "100%"},  # or use a maxHeight with scroll
-                                
-                            ),
-                        style={"overflow": "hidden", "position": "relative"}  # container style
-                        )
-                    ), width=12)
-                ], className="my-2"), # Add some margin
-                # dbc.Row([
-                #     dbc.Col(dbc.Button("Load more", id="btn-more", color="secondary", size="sm", className="me-2"), width="auto"),
-                #     dbc.Col(dbc.Button("Show all", id="btn-all", color="primary", size="sm", className="me-2"), width="auto"),
-                #     dbc.Col(dbc.Button("Collapse", id="btn-collapse", color="dark", size="sm"), width="auto"),
-                # ], className="my-2")
-            
-            ]),
-
-      
-        
-
-############################################################# tab 7 ################################################################        
-  
-    dcc.Tab(
-    label='Matrix Filter',
-    value='tab7',
-    style={
-        "height": "42px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
-        "marginRight": "4px", "backgroundColor": "#2b2e35", "color": "#c0c4cc",
-        "fontWeight": "500", "border": "1px solid #3a3f4b", "borderBottom": "none",
-        "transition": "background-color 0.3s, color 0.3s"
-    },
-    selected_style={
-        "height": "45px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
-        "backgroundColor": "#1f2128", "color": "#ffffff", "fontWeight": "600",
-        "border": "1px solid #5e636e", "borderBottom": "none",
-        "boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-    },
-
-    children=[
-        # Main row for the tab content
-          #to trigger hover enrichment 
-        dcc.Store(id='heatmap-ready-signal'),
-
-        dbc.Row([
-
-            dcc.Store(id="fullscreen-mode", data=False),
-            # Overlay expand button
-            html.Button(
-                "⤢",  # Unicode for "expand"
-                id="expand-plot-btn",
-                style={
-                    "position": "absolute", "top": "-48px", "left": "78%", "zIndex": 10,
-                    "background": "rgba(44, 62, 80, 0.5)", "border": "none", "color": "#fff","display": "flex", "alignItems": "center", "justifyContent": "center",
-                    "borderRadius": "50%", "width": "40px","height": "50px", "padding": "0px", "cursor": "pointer", "fontSize": "25px"
-                    ,"transform": "translateX(-100%)",  # Keeps the button within the parent edge
-                },
-                title="Expand Plot to Fullscreen",
-                n_clicks=0,
-            ),
-
-            # ⬅️ Left Side — Heatmap
-            dbc.Col([
-                dcc.Loading(
-                    id="loading-heatmap",
-                    type="circle",
-                    children=html.Div([
-                        dcc.Graph(id="heatmap-matrix", config={'scrollZoom': True, 'displayModeBar': False}),
-                    ], className="border p-2 my-2 rounded")
-                )
-            ], width=10, id= "plot-col-wid"),
-
-            # 🎛️ Right Side — Controls Panel
-            dbc.Col(
-                className="control-panel-1",style={"marginTop": "5px", "position": "relative"},
-                children=[
-                    # heatmap detail panel set to be invisible invisible
-                    html.Div(
-                        id='heatmap-details-panel',
-                        className='details-panel', # class for CSS styling
-                        style={'display': 'none'}, # Initially hidden
-                        children=[],
-                    ),
-
-                    # control panel visible insitially 
-                    html.H5(
-                        "Plot Controls",
-                        style={
-                            "color": "#c0c4cc", "textAlign": "center", "padding": "8px 16px",
-                            "backgroundColor": "#2b2e35", "fontWeight": "500", "fontSize": "16px",
-                            "border": "1px solid #3a3f4b", "borderTopLeftRadius": "8px",
-                            "borderTopRightRadius": "8px", "margin": "0"
-                        }
-                    ),
-                    html.Div([
-                        html.Div(
-                            "Matrix view",
-                            className="fw-bold small px-2 py-1",
-                            style={
-                                "backgroundColor": "#1f2128", "borderBottom": "1px solid #3a3f4b",
-                                "borderTopLeftRadius": "6px", "borderTopRightRadius": "6px",
-                                "color": "#c0c4cc", "fontWeight": "500", "textAlign": "center",
-                                "padding": "8px 16px",
-                            }
-                        ),
-                        html.Div([
-                        #multi drop down 
-                            html.Div([
-                                html.Label("ratio", className="form-label", style={
-                                    "marginBottom": "4px"  # optional: reduce space between label and box
-                                }),
-                                dcc.Dropdown(
-                                    id='dropdown-ratio',
-                                    options=[{'label': s, 'value': s} for s in index],
-                                    value= index[0:27],
-                                    multi=True,
-                                    clearable=False,
-                                    style={"width": "100%","maxHeight": "120px", "overflowY": "auto", "fontSize": "10px", "background-color": "#2b2e35", "color": "#ffffff"}  
-                                )
-                            ], id='dropdown-wrapper', className="mb-2", style={"width": "100%"})
-,     
-
-                            html.Div([
-                                html.Label("Local Window", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                                dcc.Input(
-                                    id="input-local-window", type="number", min=1, value=21,
-                                    debounce=False, placeholder="#", className="form-control form-control-sm",
-                                    style={"width": "32%"}
-                                )
-                            ], className="d-flex justify-content-between mb-2"),
-
-                            html.Div([
-                                html.Label("Curve Length", className="form-label", style={"width": "68%", "marginBottom": 0}),
-                                dcc.Input(
-                                    id="input-curve-length", type="number", min=4, value=DEFAULT_CURVE_LENGTH,
-                                    debounce=False, placeholder="#", className="form-control form-control-sm",
-                                    style={"width": "32%"}
-                                )
-                            ], className="d-flex justify-content-between mb-2"),
-                        ], style={"padding": "12px 10px 10px 10px"})
-
-                    ], style={
-                        "border": "1px solid #3a3f4b", "borderRadius": "6px",
-                        "backgroundColor": "#2b2e35", "margin": "10px 0 18px 0"
-                    }),
-
-                    html.Div([
-                        # Section title
-                        dcc.Store(id='tab7-buttons-store-price', data=default_tab7),
-                        dcc.Store(id='tab7-buttons-store-color', data=default_tab7),
-                        dbc.Row([
-                            # --- Left Column (50% width) ---
-                            dbc.Col([
-                                html.Div( # Thetitle for the left column.
-                                    "Values",
-                                    className="fw-bold small px-2 py-1",
-                                    style={
-                                        "backgroundColor": "#1f2128", "borderBottom": "1px solid #3a3f4b",
-                                        "borderTopLeftRadius": "6px", "borderTopRightRadius": "6px",
-                                        "color": "#c0c4cc", "fontWeight": "500", "textAlign": "center",
-                                        "padding": "8px 16px"
-                                    }
-                                ),
-                                # The original button group.
-                                dbc.ButtonGroup([
-                                    build_button_tab7("Price", id="btn-price", active=default_tab7["btn-price"]),
-                                    build_button_tab7("Percentile", id="btn-percentile", active=default_tab7["btn-percentile"]),
-                                    build_button_tab7("Z Score", id="btn-zscore", active=default_tab7["btn-zscore"]),
-                                    build_button_tab7("Roll down", id="btn-rolldown", active=default_tab7["btn-rolldown"]),
-                                    build_button_tab7("Roll up", id="btn-rollup", active=default_tab7["btn-rollup"]),
-                                    build_button_tab7("RRd diff", id="btn-riskrewarddiff", active=default_tab7["btn-riskrewarddiff"]),
-                                    build_button_tab7("Risk/ Reward", id="btn-riskreward", active=default_tab7["btn-riskreward"]),
-                                    build_button_tab7("Range", id="btn-range", active=default_tab7["btn-range"]),
-                                    build_button_tab7("Trend", id="btn-trend", active=default_tab7["btn-trend"]),
-                                    build_button_tab7("OI", id="btn-oi", active=default_tab7["btn-oi"]),
-                                    build_button_tab7("Volume", id="btn-volume", active=default_tab7["btn-volume"]),
-                                ], vertical=True, className="mb-3 w-100", style={"padding": "10px 4px 6px 12px"})
-                            ], width=6),  # width=6 makes this column take up half the space.
-
-                            # --- Right Column (50% width) ---
-                            dbc.Col([
-                                # The "Metric" title for the right column.
-                                html.Div(
-                                    "Colors",  # You can use a different title for clarity.
-                                    className="fw-bold small px-2 py-1",
-                                    style={
-                                        "backgroundColor": "#1f2128", "borderBottom": "1px solid #3a3f4b",
-                                        "borderTopLeftRadius": "6px", "borderTopRightRadius": "6px",
-                                        "color": "#c0c4cc", "fontWeight": "500", "textAlign": "center",
-                                        "padding": "8px 16px"
-                                    }
-                                ),
-                                # The duplicated button group with new, unique IDs.
-                                dbc.ButtonGroup([
-                                    #build_button_tab7("Price", id="btn-price_2", active=default_tab7["btn-price_2"]),
-                                    build_button_tab7("Percentile", id="btn-percentile_2", active=default_tab7["btn-percentile_2"]),
-                                    build_button_tab7("≤ 5 or ≥ 95", id="btn-rank595_2", active=default_tab7["btn-rank595_2"]),
-                                    build_button_tab7("≤ 10 or ≥ 90", id="btn-rank1090_2", active=default_tab7["btn-rank1090_2"]),
-                                    build_button_tab7("Z Score", id="btn-zscore_2", active=default_tab7["btn-zscore_2"]),
-                                    build_button_tab7("RRd diff", id="btn-riskrewarddiff_2", active=default_tab7["btn-riskrewarddiff_2"]),
-                                    build_button_tab7("Risk/ Reward", id="btn-riskreward_2", active=default_tab7["btn-riskreward_2"]),
-                                    build_button_tab7("Roll down", id="btn-rolldown_2", active=default_tab7["btn-rolldown_2"]),
-                                    build_button_tab7("Roll up", id="btn-rollup_2", active=default_tab7["btn-rollup_2"]),
-                                    build_button_tab7("Range", id="btn-range_2", active=default_tab7["btn-range_2"]),
-                                    build_button_tab7("Trend", id="btn-trend_2", active=default_tab7["btn-trend_2"]),
-                                    build_button_tab7("OI", id="btn-oi_2", active=default_tab7["btn-oi_2"]),
-                                    build_button_tab7("Volume", id="btn-volume_2", active=default_tab7["btn-volume_2"]),
-                                ], vertical=True, className="mb-3 w-100", style={"padding": "10px 12px 6px 4px"})
-                            ], width=6),  # width=6 makes this column take up the other half.
-                        ])
-                    ]), 
-
-                    html.Div(id="matrix-filter-info", className="text-muted small mt-2")
-                ],
-                width=2, id= "control-col-wid"
-            )
-        ],style={"position": "relative"})
-    ]
-),
-###################################################  tab 2 ##############################################################################
-
-dcc.Tab(
-    label='Chart',
-    value='tab2',
-    style={
-        "height": "42px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
-        "marginRight": "4px", "backgroundColor": "#2b2e35", "color": "#c0c4cc",
-        "fontWeight": "500", "border": "1px solid #3a3f4b", "borderBottom": "none",
-        "transition": "background-color 0.3s, color 0.3s"
-    },
-    selected_style={
-        "height": "45px", "borderRadius": "8px 8px 0 0", "padding": "8px 16px",
-        "backgroundColor": "#1f2128", "color": "#ffffff", "fontWeight": "600",
-        "border": "1px solid #5e636e", "borderBottom": "none",
-        "boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-    },
-    children=[
-        html.Div([
-            # --- ROW 1: Main Chart (The Reference) ---
-            # Structure: dbc.Col -> dcc.Loading -> dcc.Graph
-            dbc.Row([
-                dbc.Col(
-                    dcc.Loading(
-                        id="loading-chart",
-                        type="circle",
-                        children=dcc.Graph(
-                            id='chart-plot',
-                            config={'scrollZoom': True, 'displayModeBar': False}
-                        )
-                    ),
-                    className="border p-2 my-2 rounded"
-                )
-            ], className="mb-3"),
-
-            # --- ROW 2: Secondary Chart (Corrected) ---
-            # <<< CHANGE: The structure is now identical to Row 1
-            # Structure: dbc.Col -> [Buttons_Div, dcc.Loading]
-            dcc.Store(id="tab_2_2_2_3_toggle-store", data=default_2_2_2_3),    
-            dbc.Row([
-                dbc.Col(
-                    # The children are now a list containing the buttons and the graph
-                    children=[
-                        # Item 1: The buttons
-                        
-                        html.Div([
-                            build_button("Sum of eases/ hikes", id="btn-ease_hike", active=default_2_2_2_3["btn-ease_hike"]),
-                            build_button("nth Out", id="btn-nth_out", active=default_2_2_2_3["btn-nth_out"]),
-                            build_button("Mid Out", id="btn-mid_out",active=default_2_2_2_3["btn-mid_out"]),
-                            build_button("1st S12", id="btn-1sts12",active=default_2_2_2_3["btn-1sts12"]),
-                            build_button("nth S12", id="btn-nths12",active=default_2_2_2_3["btn-nths12"]),
-                            build_button("12th S12", id="btn-12ths12",active=default_2_2_2_3["btn-12ths12"]),
-                            build_button("nth L6", id="btn-nthl6",active=default_2_2_2_3["btn-nthl6"]),
-                            build_button("EFFR", id="btn-effr",active=default_2_2_2_3["btn-effr"]),
-                            build_button("2 Yr", id="btn-2yr",active=default_2_2_2_3["btn-2yr"]),
-                            build_button("5 Yr", id="btn-5yr",active=default_2_2_2_3["btn-5yr"]),
-                            build_button("10 Yr", id="btn-10yr",active=default_2_2_2_3["btn-10yr"]), #
-                            build_button("2y10y", id="btn-2y10y",active=default_2_2_2_3["btn-2y10y"]),
-                        ],
-                        style={
-                            'display': 'flex',
-                            'gap': '0.5rem',
-                            'justifyContent': 'center',
-                            'flexWrap': 'wrap',
-                            'marginBottom': '1rem'
-                        }),
-
-                        # Item 2: The graph
-                        dcc.Loading(
-                            id="loading-sum-eases",
-                            type="circle",
-                            # Use flex-grow to make the graph fill the remaining vertical space
-                            children=dcc.Graph(
-                                id='sum-of-eases-plot',
-                                config={'scrollZoom': True, 'displayModeBar': False},
-                                style={'height': '100%'}
-                            ),
-                            style={'flex-grow': 1}
-                        )
-                    ],
-                    # Styles are applied directly to the dbc.Col
-                    className="border p-2 my-2 rounded",
-                    # style={
-                    #     'height': '500px',
-                    #     'display': 'flex',
-                    #     'flexDirection': 'column'
-                    # }
-                )
-            ]),
-
-            # --- ROW 3: Third Chart ---
-            # Structure: dbc.Col -> dcc.Loading -> dcc.Graph
-            dbc.Row([
-                dbc.Col(
-                    # The children are now a list containing the buttons and the graph
-                    children=[
-                        # Item 1: The buttons
-                        html.Div([
-                            build_button("Sum of eases/ hikes", id="btn-ease_hike_3twin", active=default_2_2_2_3["btn-ease_hike_3twin"]),
-                            build_button("nth Out", id="btn-nth_out_3twin", active=default_2_2_2_3["btn-nth_out_3twin"]),
-                            build_button("Mid Out", id="btn-mid_out_3twin",active=default_2_2_2_3["btn-mid_out_3twin"]),
-                            build_button("1st S12", id="btn-1sts12_3twin",active=default_2_2_2_3["btn-1sts12_3twin"]),
-                            build_button("nth S12", id="btn-nths12_3twin",active=default_2_2_2_3["btn-nths12_3twin"]),
-                            build_button("12th S12", id="btn-12ths12_3twin",active=default_2_2_2_3["btn-12ths12_3twin"]),
-                            build_button("nth L6", id="btn-nthl6_3twin",active=default_2_2_2_3["btn-nthl6_3twin"]),
-                            build_button("EFFR", id="btn-effr_3twin",active=default_2_2_2_3["btn-effr_3twin"]),
-                            build_button("2 Yr", id="btn-2yr_3twin",active=default_2_2_2_3["btn-2yr_3twin"]),
-                            build_button("5 Yr", id="btn-5yr_3twin",active=default_2_2_2_3["btn-5yr_3twin"]),
-                            build_button("10 Yr", id="btn-10yr_3twin",active=default_2_2_2_3["btn-10yr_3twin"]),
-                            build_button("2y10y", id="btn-2y10y_3twin",active=default_2_2_2_3["btn-2y10y_3twin"]),
-                        ],
-                        style={
-                            'display': 'flex',
-                            'gap': '0.5rem',
-                            'justifyContent': 'center',
-                            'flexWrap': 'wrap',
-                            'marginBottom': '1rem'
-                        }),
-
-                        # Item 2: The graph
-                        dcc.Loading(
-                            id="loading-scatters",
-                            type="circle",
-                            # Use flex-grow to make the graph fill the remaining vertical space
-                            children=dcc.Graph(
-                                id='scatter_plot_2_3',
-                                config={'scrollZoom': True, 'displayModeBar': False},
-                                style={'height': '100%'}
-                            ),
-                            style={'flex-grow': 1}
-                        )
-                    ],
-                    # Styles are applied directly to the dbc.Col
-                    className="border p-2 my-2 rounded",
-                    # style={
-                    #     'height': '500px',
-                    #     'display': 'flex',
-                    #     'flexDirection': 'column'
-                    # }
-                )
-            ]),
-
-        ], style={'padding': '16px'})
-    ]
-),
-######################################################## tab3 #############################################################
-    
-
-
-    dcc.Tab(label='KDE', value='tab3',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-    children=[
-        html.Div([  #####css-for-control panel
-            dbc.Row([
-                dbc.Col(dcc.Loading(
-                    id="loading-kde",
-                    type="circle", 
-                    children=html.Div(dcc.Graph(id='kde-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-2 my-2 rounded")
-                ), width=10),
-            ])
-        ],style={"position": "relative"})##########css-for-control panel
-    ]), 
-
-################################################ tab 4 ################################################################
-dcc.Tab(label='KDE (Hike Cycle)', value='tab4',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-    children=[
-        html.Div([  #####css-for-control panel
-            dbc.Row([
-                dbc.Col(dcc.Loading(
-                    id="loading-hike-kde",
-                    type="circle",
-                    children=html.Div(dcc.Graph(id='hike-kde-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-2 my-2 rounded")
-                ), width=10),
-            ])
-        ],style={"position": "relative"}) ##########css-for-control panel
-    ]),
-
-###################################################### tab 5 ###################################################
-    dcc.Tab(label='KDE (Ease Cycle)', value='tab5',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-    children=[
-        html.Div([  #####css-for-control panel
-            dbc.Row([
-                dbc.Col(dcc.Loading(
-                    id="ease-loading-kde",
-                    type="circle",
-                    children=html.Div(dcc.Graph(id='ease-kde-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-2 my-2 rounded")
-                ), width=10),
-            ])
-        ],style={"position": "relative"}) ##########css-for-control panel
-    ]),
-
-###################################################### tab 6 ####################################################
-    dcc.Tab(label='KDE (Side Ways)', value='tab6',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-    
-    children=[
-        dbc.Row([
-            dbc.Col(dcc.Loading(
-                id="side-loading-kde",
-                type="circle",
-                children=html.Div(dcc.Graph(id='side-kde-plot', config={'scrollZoom': True, 'displayModeBar': False}),className="border p-2 my-2 rounded")
-            ), width=10),
-        ])
-    ]),
-
-
-
-
-################################################################# tab 8 ###################################################
-    dcc.Tab(label='Snapshot', value='tab8',
-    style={"height": "42px","borderRadius": "8px 8px 0 0","padding": "8px 16px","marginRight": "4px","backgroundColor": "#2b2e35","color":  "#c0c4cc","fontWeight": "500","border": "1px solid #3a3f4b","borderBottom": "none","transition": "background-color 0.3s, color 0.3s"
-        },
-    selected_style={"height": "45px","borderRadius": "8px 8px 0 0","padding": "8px 16px","backgroundColor": "#1f2128","color": "#ffffff","fontWeight": "600","border": "1px solid #5e636e","borderBottom": "none","boxShadow": "0px -2px 6px rgba(0, 0, 0, 0.4)"
-        },
-
-    ),
-]),  # ← close Tabs here
-
-   
-html.Hr(),
-footer_component, 
-
-
+        )
+    ]),  # ← close Tabs here
+#############################################################################################################################################
+    kde_control_wrapper,
+    #kde_checklist,
+    html.Hr(),
+    footer_component, 
 
     dcc.Store(id='raw-data-store', storage_type='session'),
-    dcc.Store(id='general-store', data=[default_comdty, "L6", 8, DEFAULT_LOOKBACK], storage_type='session'),
+    dcc.Store(id='general-store', data=[default_comdty, DEFAULT_STR_NAME, DEFAULT_STR_NO, DEFAULT_LOOKBACK], storage_type='session'),
+    #dcc.Store(id="dt_latest", storage_type='session'),
     dcc.Store(id='structure-data-store', storage_type='session'),
     dcc.Store(id='final-mainseriesonly-store', storage_type='session'),
     dcc.Store(id="shared-xrange_2_1_2_2"),   # hidden storage for sync
-    dcc.Store(id='cycle-store',storage_type='session' ),#persistence=Tru
-
+    dcc.Store(id='cycle-store',storage_type='session' ),#persistence=True
+    dcc.Store(id='user-matrix_ratio-preference', storage_type='local'),
+    dcc.Store(id="colorscale-preference", data={"selected_color_scale": "BG"},  storage_type='local')
 
 ], fluid=True)  # ← close Container here
 
 
-###############################################################################################################
-
-      # separator before footer
-
-
-
-
-
-
-
-################################################################ #########################################################
 # ---------------------------------------------------------------------------------------------------
 # CALLBACK: Load & Process raw data (outright) and Structure Data df and interested Series
 # ------------------------------------------------------------------------------------------------------
-def serialize_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
-    """Convert a pandas DataFrame to JSON-serializable dictionary - CORRECTED"""
-    if df is None or df.empty:
-        return {"data": [], "index": [], "columns": []}
-    
-    # Ensure index is serializable
-    try:
-        index_serialized = df.index.astype(str).tolist()
-    except:
-        index_serialized = list(range(len(df)))
-    
-    return {
-        "data": df.values.tolist(),
-        "index": index_serialized,
-        "columns": df.columns.tolist()
-    }
+#setting lookback period
+@callback(
+    Output('lookback_prd', 'value'),
+    Input('lookback_prd', 'search_value'),
+    State('lookback_prd', 'value'),
+    prevent_initial_call=False
+)
+def set_custom_lookback(search_value, current_value):
+    """
+    Allows both selecting from dropdown and typing custom lookback days.
+    If user types numeric input, use it directly.
+    """
+    if search_value:
+        sv = search_value.strip() # ✅ numeric check
+        if sv.isdigit():
+            val = int(sv)
+            if val >= 63:
+                return val
+            else:
+                return MIN_DEFAULT_LOOKBACK
+        else:
+            # non-numeric input → reset to default
+            return DEFAULT_LOOKBACK
+    # no search_value (user picked from list or cleared)
+    return current_value or DEFAULT_LOOKBACK
 
-
-def serialize_series(series: pd.Series) -> Dict[str, Any]:
-    """Convert a pandas Series to JSON-serializable dictionary - CORRECTED"""
-    if series is None or series.empty:
-        return {"values": [], "index": []}
-    
-    # Ensure index is serializable
-    try:
-        index_serialized = series.index.astype(str).tolist()
-    except:
-        index_serialized = list(range(len(series)))
-    
-    return {
-        "values": series.values.tolist(),
-        "index": index_serialized
-    }
 
 @callback(
     Output('general-store', 'data'),
     [Input('filename', 'value'),
     Input('str_name', 'value'),
     Input('str_number', 'value'),
-    Input('lookback_prd', 'value')])
+    Input('lookback_prd', 'value')],
+    prevent_initial_call= False)
 def general_info(filename, str_name, str_num, lookback_prd):
     if not filename or not str_name or not  str_num or not  lookback_prd :
         raise PreventUpdate # don’t update store if no file chosen
 
     comdty = extract_comdty(filename)
-    str_name = str(str_name).strip().upper() if str_name else None
+    str_name = str(str_name).strip() if str_name else None
     str_num = int(str_num) if str_num and str(str_num).isdigit() else None
     lookback_prd = int(lookback_prd) if lookback_prd and str(lookback_prd).isdigit() else None
-
+    #print(str_name)
     # Return as list (JSON serializable)
     return [comdty, str_name, str_num, lookback_prd]
 
 
-#populatinty comodity 
+######################## populatintg comodity #################################################
 @callback(
     Output('comdty', 'value'),
-    Input('general-store', 'data')
+    Input('general-store', 'data'),
+    prevent_initial_call=False,
 )
 def update_comdty_input(general_data: list) -> str:
     """Updates the commodity input field based on the stored commodity data."""
@@ -1017,10 +204,13 @@ def update_comdty_input(general_data: list) -> str:
         return ""
     return str(general_data[0])   # first element = comdty
 
+################################################ extracting raw data i.e outright ################################
 @callback(
-    Output('raw-data-store', 'data'),
+    [Output('raw-data-store', 'data'),
+    Output('dt_latest', 'value')],
     [Input('filename', 'value'),
      Input('lookback_prd', 'value')],
+     prevent_initial_call=False,
 )
 def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, Any]:
     """CORRECTED: Extract raw data callback - simplified validation"""
@@ -1031,25 +221,30 @@ def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, 
     try:
         lookback_prd_int = int(lookback_prd)
         if lookback_prd_int <= 0:
-            return {}
+            return {}, None
         
         # Load and process data - FIXED: now returns tuple
         raw_df = process_raw_data(filepath=filename, lookback_prd=lookback_prd_int)
         if raw_df.empty:
-            return {}
+            return {}, None
         
         # Serialize the raw data for storage
+        try:
+            ts = pd.to_datetime(raw_df.index[0], errors='coerce')
+            latest_date = ts.strftime("%d-%m-%y") if pd.notnull(ts) else None
+        except Exception as e:
+            logging.warning(f"Could not parse latest date: {e}")
+            latest_date = None
+
         serialized_raw_data = serialize_dataframe(raw_df)
-        return serialized_raw_data
+        return serialized_raw_data, latest_date
         
     except Exception as e:
         logging.error(f"Error in extract_raw_data_callback for file {filename}: {e}")
-        return {}
+        return {}, None
 
 
-
-
-############################ ONLY MAIN SERIES cal ######################################################################
+############################ ONLY MAIN SERIES cal of length lookback prd ######################################################################
 @callback(
     Output('final-mainseriesonly-store', 'data'),
     [Input('raw-data-store', 'data'),
@@ -1057,6 +252,7 @@ def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, 
     Input('str_name', 'value'),
     Input('str_number', 'value'),
     Input('lookback_prd', 'value')],
+    prevent_initial_call=False
 )
 def compute_main_series_only(raw_data_dict: Dict[str, Any], general_store, str_name, str_number, lookback_prd):
     if not raw_data_dict or not str_name or not general_store or not str_number or not lookback_prd:
@@ -1075,16 +271,11 @@ def compute_main_series_only(raw_data_dict: Dict[str, Any], general_store, str_n
             return {}
         str_number_int = int(str_number)
         lookback_int = int(lookback_prd)
-        return serialize_series( fn_main_series_only(raw_df,str_name,str_number_int, general_store[0],lookback_int))
+        return serialize_series( fn_main_series_only(raw_df,str_name,str_number_int, general_store[0],lookback_int, DEFAULT_WINDOW, DEFAULT_OUTLIER_K))
         
     except Exception as e:
         print(f"Error in compute_main_series_only_callback: {e}")
         return {}
-
-
-
-
-
 
 # ------------------------------------------------------------------------------------------------------------------
 # CALLBACK: Toggle Visibility of Curve Controls tab 1
@@ -1107,12 +298,11 @@ def toggle_input_visibility(active_flags):
         {"display": "block"} if any(f in active_flags for f in ["MA", "MED", "BB", "quant_ser", "XN"]) else {"display": "none"}
     ]
 
-
 # -----------------------------------------------------------------------------------------------------
 # CALLBACK: Curve Plot for Tab 1
 # -----------------------------------------------------------------------------------------------------
 
-########### str_df store #################
+################################################## str_df store ############################################################################################
 @app.callback(
     Output('structure-data-store', 'data'),
     Input('raw-data-store', 'data'),
@@ -1158,11 +348,8 @@ def store_str_df_dcc_(raw_data_dict, win_local,str_name,  general_store):
     except Exception as e:
         print(f"Error in computing str_df from raw_df: {e}")
         return {}
-    
 
-
-
-
+################################################## plotting 1.1 ############################################################################################   
 @app.callback(
     Output('curve-plot', 'figure'),
     Input('raw-data-store', 'data'),
@@ -1196,7 +383,6 @@ def update_curve_plot(raw_data_dict,  curve_len, str_name, general_store, active
         #print(raw_df.head())
         #raw_data,  comdty, local_win, str_name)
         local_win_for_str_df= min(win_local+ 21, raw_df.shape[0])
-        #str_df= process_structure_data(raw_df.iloc[:local_win_for_str_df,:], general_store[0] , win_local,  general_store[1])
         # ---- Simple global cache ----
         sub_df = raw_df.iloc[:local_win_for_str_df, :]
                 # Pick first row values as tuple (safe even if only one column)
@@ -1247,6 +433,8 @@ def update_curve_plot(raw_data_dict,  curve_len, str_name, general_store, active
             win_local=int(win_local) if win_local else 21,
             quantile=float(quantile) if plot_flags["quant_ser"] else None,
             bb_std=float(bb_std) if plot_flags["BB"] else None,
+            DEFAULT_WINDOW=DEFAULT_WINDOW, 
+            DEFAULT_OUTLIER_K=DEFAULT_OUTLIER_K
         )
 
     except Exception as e:
@@ -1335,8 +523,8 @@ def update_chart_tab(stored: Dict[str, Any], general) -> Any:
         print(f"[update_chart_tab] Error: {e}")
         return warning_plot("⚠️ Failed to plot series")
 
-# ##################### tab 2_2 #############################################################################
-# ########################################### tab_2_3 ################################################
+# ##################### tab 2_2 ######################################################################################################################
+# ########################################### tab_2_3 ###################################################################################################
 
 @app.callback(
     Output("tab_2_2_2_3_toggle-store", "data"),
@@ -1410,41 +598,41 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
 
     # --- Trace Generation Configuration ---
     # Define a configuration map for most traces to reduce repetitive if-blocks
-    
+    #print(str_name)
     trace_config = {
         "btn-nth_out": {
             "func": Out_tab2_2,
-            "args": (raw_df,comdty, str_num, lookback_prd),
+            "args": (raw_df,comdty, str_num, lookback_prd, DEFAULT_WINDOW, DEFAULT_OUTLIER_K),
             "legend": "nth Out",
             "color": "#f58231" # Orange
         },
         "btn-mid_out": {
             "func": Out_tab2_2,
-            "args": (raw_df, comdty, str_num + int(len(get_ratio(str_name)) / 2), lookback_prd),
+            "args": (raw_df, comdty, str_num + int(len(get_ratio(str_name)) / 2), lookback_prd, DEFAULT_WINDOW, DEFAULT_OUTLIER_K),
             "legend": "Mid Out",
             "color": "#ffe119" # Bright Yellow
         },
         "btn-1sts12": {
             "func": S12_tab2_2,
-            "args": (raw_df, 1, lookback_prd),
+            "args": (raw_df, 1, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K),
             "legend": "1st S12",
             "color": "#006666" # Cyan
         },
         "btn-nths12": {
             "func": S12_tab2_2,
-            "args": (raw_df, str_num, lookback_prd),
+            "args": (raw_df, str_num, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K),
             "legend": "nth S12",
             "color": "#3cb44b" # Strong Green
         },
         "btn-12ths12": {
             "func": S12_tab2_2,
-            "args": (raw_df, 12, lookback_prd),
+            "args": (raw_df, 12, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K),
             "legend": "12th S12",
             "color": "#f032e6" # Magenta
         },
         "btn-nthl6": {
             "func": L6_tab2_2,
-            "args": (raw_df, str_num, lookback_prd),
+            "args": (raw_df, str_num, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K ),
             "legend": "nth L6",
             "color": "rgb(152,78,163)"
         }
@@ -1455,9 +643,9 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
     # 1. Sum of eases/hikes
     if toggle_store.get("btn-ease_hike"):
         if comdty == "meets":
-            series_data = cal_sum_of_same_sign_meets(raw_df, comdty, lookback_prd)
+            series_data = cal_sum_of_same_sign_meets(raw_df, comdty, lookback_prd, DEFAULT_WINDOW= DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
         elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ESTR"}:
-            series_data = cal_sum_of_eases_hikes(raw_df, comdty, lookback_prd)
+            series_data = cal_sum_of_eases_hikes(raw_df, comdty, lookback_prd, DEFAULT_WINDOW=DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
         else:
             series_data = pd.Series(dtype='float64')
         
@@ -1468,7 +656,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
     # 2. Treasury rates (fetch data only once)
     treasury_buttons = {"btn-effr", "btn-2yr", "btn-5yr", "btn-10yr", "btn-2y10y"}
     if any(toggle_store.get(btn) for btn in treasury_buttons):
-        df_rates = fetch_rates_cycle(filepath="SR3_ED.xlsm", sheetname="treasuries rates", lookback_prd=lookback_prd)
+        df_rates = fetch_rates_cycle(lookback_prd, filepath="SR3_ED_GEN.xlsm", sheetname="treasuries rates")
         
         treasury_map = {
             "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "black"},
@@ -1484,7 +672,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
                 add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=params["legend"], color=params["color"])
                 if btn == "btn-effr":
                     # Special correlation case for EFFR
-                    corr = {'mean_rolling_correlation': None, 'distance_correlation': None}
+                    corr = {'pearson':None, 'mean_rolling_correlation': None, 'distance_correlation': None}
                 else:
                     corr = compute_correlation_parameters(chart2_1_series, series_data)
                 add_chart_2_2(fig2_2, series_data, corr, legend=params["legend"], color=params["color"])
@@ -1494,51 +682,10 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         if toggle_store.get(btn):
             series_data = config["func"](*config["args"])
             add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=config["legend"], color=config["color"])
-            corr = compute_correlation_parameters(chart2_1_series, series_data)
+            corr = compute_correlation_parameters(chart2_1_series, series_data )
             add_chart_2_2(fig2_2, series_data, corr, legend=config["legend"], color=config["color"])
 
     return fig2_2, fig2_3
-
-
-
-# #######################################3 syncing x-axis of fig 2_2 and fig 2_3 ###############
-# # --- 1. Helper Function for Synchronization ---
-# def sync_x_axis(relayout_data, current_figure):
-#     if not relayout_data or 'xaxis.range[0]' not in relayout_data: # Guard clause: Do nothing if there's no relayoutData or it's not a zoom/pan event
-#         return no_update
-
-#     new_x_range = [relayout_data['xaxis.range[0]'], relayout_data['xaxis.range[1]']]
-#     if 'xaxis' in current_figure['layout'] and 'range' in current_figure['layout']['xaxis']: # Check if the target figure's x-axis range is already the same to prevent circular updates
-#         current_x_range = current_figure['layout']['xaxis']['range']
-#         if current_x_range == new_x_range:
-#             return no_update
-
-#     # Create a new figure object to avoid modifying the original state directly
-#     fig = go.Figure(data=current_figure['data'], layout=current_figure['layout'])
-#     fig.update_layout(xaxis_range=new_x_range)   # Update the x-axis range
-#     return fig
-
-# #syncing
-#     # --- 4. Refactored Callbacks ---
-# @app.callback(
-#     Output('chart-plot', 'figure', allow_duplicate=True),
-#     Input('sum-of-eases-plot', 'relayoutData'),
-#     State('chart-plot', 'figure'),
-#     prevent_initial_call=True
-# )
-# def sync_chart_plot_from_sum_eases(relayout_data, current_figure):
-#     return sync_x_axis(relayout_data, current_figure)
-
-
-# @app.callback(
-#     Output('sum-of-eases-plot', 'figure', allow_duplicate=True),
-#     Input('chart-plot', 'relayoutData'),
-#     State('sum-of-eases-plot', 'figure'),
-#     prevent_initial_call=True
-# )
-# def sync_sum_eases_from_chart_plot(relayout_data, current_figure):
-#     return sync_x_axis(relayout_data, current_figure)
-
 
 # # ---------------------------------------------------------------------------------------------------------
 # # CALLBACK:  shared KDE Input Toggle tab3 | tab4 | tab5 | tab6
@@ -1547,7 +694,8 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
 # #rendering control panel in tab 3 to tab6
 @app.callback(
     Output("kde-flags-shared-wrapper", "style"),
-    Input("tabs", "value")
+    Input("tabs", "value"),
+    prevent_initial_call=False
 )
 def toggle_kde_controls_visibility(active_tab):
     # Show only for Tab 3 to 6
@@ -1585,13 +733,12 @@ def toggle_input_visibility_kdes(kde_flags, active_tab):
     Input('kde-flags-shared', 'value'),
     Input('kde-val-line-shared', 'value'),
     Input('kde-pc-line-shared', 'value'),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     if not stored or "values" not in stored or "index" not in stored:
         return warning_plot("⚠️ Series data not available")
 
-   
     series = pd.Series(
     data=stored["values"],
     index=pd.to_datetime(stored["index"], errors="coerce")
@@ -1618,7 +765,7 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     )
 
 
-# ######################################################################################
+# ###################################################################################### cycle classification fo tab 4,5,6, #############################################
 @app.callback(
     Output("cycle-store", "data"),
     Input("raw-data-store", "data"),
@@ -1628,7 +775,7 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     Input("hike-threshold-input", "value"),
     Input("ease-threshold-input", "value"),
     State('general-store', 'data'),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def classify_and_store(stored_raw, stored_ser, base_str, sum_first_n_base, hike_threshold, ease_threshold, general_store):
     if general_store is not None:
@@ -1700,11 +847,10 @@ def classify_and_store(stored_raw, stored_ser, base_str, sum_first_n_base, hike_
     Output('side-kde-plot', 'figure')],
     Input("cycle-store", "data"),
     Input('kde-flags-shared', 'value'),
-
     Input('kde-val-line-shared', 'value'),
     Input('kde-pc-line-shared', 'value'),
     State('general-store', 'data'),
-    prevent_initial_call=False
+    prevent_initial_call=True
 )
 def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_store):
     def warning_all(msg):
@@ -1762,23 +908,12 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
 
 # ############################################## tab 7 ############################################################################
 #computed 3d df  storing in cache memory 
-@cache.memoize()  
-def cached_compute_3d_df( raw_df, local_win: int, curve_len: int):
-    """
-    A wrapper for compute_3d_structure that is memoized (cached).
-    It takes a JSON-serializable dict and converts it to a DataFrame internally.
-    """
-    # This print statement will only execute when the function is not using a cached result
-    print(f"Cache memo: Running computation for 3d df for win={local_win}, len={curve_len}...")
-    
-    # # Convert the dictionary from dcc.Store back into a DataFrame
-    # raw_df = pd.DataFrame(
-    #     data=stored_raw['data'],
-    #     index=pd.to_datetime(stored_raw.get('index', None), errors='coerce', format='mixed'), # Convert back to DatetimeIndex
-    #     columns=stored_raw.get('columns', None)
-    # )
-    # Call original, expensive function
-    return compute_3d_structure(raw_df, local_win=local_win, curve_length=curve_len)
+def cached_compute_3d_df(df_hash: str, local_win: int, curve_len: int, raw_df):
+    @cache.memoize()
+    def _inner(df_hash, local_win, curve_len):
+        print(f"Cache miss → computing 3D df (win={local_win}, len={curve_len})")
+        return compute_3d_structure(raw_df, local_win=local_win, curve_length=curve_len)
+    return _inner(df_hash, local_win, curve_len)
 
 
 
@@ -1849,34 +984,116 @@ def toggle_fullscreen(n_clicks, is_fullscreen):
         return new_state, 12, {"display": "none"}, "⤡"  # Fullscreen: plot is wide, controls hidden, icon is "restore"
     else: 
         return new_state, 10, {"display": "block"}, "⤢"# Default: plot normal width, controls visible, icon is "expand"
+    
+############################### color scale switching stsrts #########################################################
 
+@callback(
+    Output("colorscale-menu", "style"),
+    Output("color-scale-choice", "value"),
+    Output("colorscale-preference", "data"),
+    Input("color-title", "n_clicks"),
+    Input("color-scale-choice", "value"),
+    State("colorscale-menu", "style"),
+    State("colorscale-preference", "data"),
+    prevent_initial_call=True
+)
+def handle_colorscale_menu(n_clicks, selected_value, current_style, stored_data):
+    """
+    Opens menu on single click and auto-closes whenever the user clicks a radio button,
+    even if the selection is the same as before.
+    """
+    stored_data = stored_data or {}
+    new_style = current_style.copy()
 
+    # Initialize static attributes to track actual user selection
+    if not hasattr(handle_colorscale_menu, "prev_value"):
+        handle_colorscale_menu.prev_value = stored_data.get("selected_color_scale", "BG")
 
+    # -------------------------
+    # 1️⃣ Toggle menu on single click of Colors header
+    # -------------------------
+    if n_clicks is not None:
+        current_display = current_style.get("display", "none")
+        new_display = "block" if current_display == "none" else "none"
+        new_style["display"] = new_display
+        stored_data["menu_visible"] = new_display == "block"
+
+    # -------------------------
+    # 2️⃣ Close menu only on actual user click of radio button
+    # -------------------------
+    # Only react if the value has changed or user clicks the same value again
+    if selected_value is not None and selected_value != handle_colorscale_menu.prev_value:
+        stored_data["selected_color_scale"] = selected_value
+        handle_colorscale_menu.prev_value = selected_value
+        new_style["display"] = "none"
+        stored_data["menu_visible"] = False
+
+    # -------------------------
+    # 3️⃣ Restore the radio button value
+    # -------------------------
+    restored_value = stored_data.get("selected_color_scale", "BG")
+
+    return new_style, restored_value, stored_data
+
+############################## color scale switching  ends #########################################################
+############################## user matrix default ratio remember #########################################################
+@app.callback(
+    Output('dropdown-ratio', 'value'),
+    Output('user-matrix_ratio-preference', 'data'),
+    Input('dropdown-ratio', 'value'),
+    #Input('dropdown-commodity', 'value'),
+    State('user-matrix_ratio-preference', 'data'),
+    prevent_initial_call=False
+)
+def sync_ratio_preferences(selected_ratios, stored_data):
+    # Ensure the store is initialized
+    if stored_data is None:
+        return selected_ratios, selected_ratios
+
+    trigger = ctx.triggered_id
+     # ---- Case 1: App startup or reload ----
+    if trigger is None:# Restore saved value from store
+        return stored_data, stored_data
+
+    # ---- Case 2: User changed ratios manually ----
+    if trigger == 'dropdown-ratio': # Update store to match latest selection
+        return selected_ratios, selected_ratios
+    # Case 3: No relevant trigger
+    return no_update, stored_data
+############################## user matrix default ratio remember ends #########################################################
 @app.callback(
     Output('heatmap-matrix', 'figure'),
     Output('heatmap-ready-signal', 'data'),
     Input('raw-data-store', 'data'),
     Input('dropdown-ratio', 'value'),
     Input('input-local-window', 'value'),
-    Input('input-curve-length', 'value'),
     Input('tab7-buttons-store-price', 'data'),
     Input('tab7-buttons-store-color', 'data'),
     Input('tabs', 'value'),
+    Input('curve_length', 'value'),
     State('general-store', 'data'),
+    State('colorscale-preference', 'data'), 
     prevent_initial_call=True
 )
-def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len, toggle_store_price, toggle_store_color, tab, general_store):
+def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_store_price, toggle_store_color, tab, curve_len, general_store, stored_color_data):
     if not raw_data_dict:
         return warning_plot("⚠ data not available (no stored data)"), time.time()
 
     if not selected_ratio:
-        selected_ratio=  {"Out", "S3","S6","L3","L6"} # Return an empty figure
-    
+        selected_ratio=  ["Out", "S3","S6","L3","L6"] # Return an empty figure
+
     if general_store is not None:
         comdty = general_store[0]
         if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
-            selected_ratio = [index[i] for i in list(range(0, 4)) + list(range(28, 34))]
-    
+            selected_ratio =["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
+
+    if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
+        curve_len= DEFAULT_CURVE_LENGTH
+        print("Invalid curve_len update_tab_heatmap_basic")
+    else:
+        curve_len= curve_len
+
+
     if not raw_data_dict.get('data'):
         return {}
     
@@ -1886,10 +1103,28 @@ def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len,
         columns=raw_data_dict.get('columns', None)
     )
     
-    if raw_df is None:
+    if raw_df is None or raw_df.empty:
         raise PreventUpdate  # or handle gracefully
     
-    str_data_3d = cached_compute_3d_df(raw_df,  local_win, curve_len)
+    import hashlib
+
+    # inline hashing try quick hash
+        # --- 2. Create quick hash AFTER DataFrame exists ---
+    try:
+        first_row = raw_df.iloc[0].to_numpy().tobytes() if len(raw_df) > 0 else b''
+        last_row = raw_df.iloc[-1].to_numpy().tobytes() if len(raw_df) > 0 else b''
+    except Exception:
+        first_row = str(raw_df.iloc[0].tolist()).encode() if len(raw_df) > 0 else b''
+        last_row= str(raw_df.iloc[-1].tolist()).encode() if len(raw_df) > 0 else b''
+
+    meta = f"{raw_df.shape}".encode()
+    df_quick_hash = hashlib.md5(first_row + last_row + meta).hexdigest()
+
+    str_data_3d = cached_compute_3d_df(df_quick_hash, local_win, curve_len, raw_df)
+
+    if not isinstance(str_data_3d.index, pd.MultiIndex) or "Structure" not in str_data_3d.index.names:
+        print("⚠ Unexpected structure in cached_compute_3d_df output")
+        return warning_plot("⚠ invalid STR data format"), time.time()
     filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
 
     latest_date =  filtered_3d_df.index.get_level_values("Date").unique()[0]
@@ -1901,16 +1136,19 @@ def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len,
     range_df= compute_range_df(filtered_3d_df)
     regime_df= classify_regime_in_series(filtered_3d_df)
     #print("pd", percentile_df)
+    # color_pref
+    color_key = stored_color_data or {}
+    color_pref = color_key.get("selected_color_scale", "BG")  # default to BG
     values_btn_fig_map = {
-        "btn-price": lambda: generate_heatmap(1, latest_df),
-        "btn-percentile": lambda: generate_heatmap(0, percentile_df),
-        "btn-zscore": lambda: generate_heatmap(1, zscore_df),
-        "btn-riskrewarddiff": lambda: generate_heatmap(1, risk_reward_diff_df),
-        "btn-riskreward": lambda: generate_heatmap(1, risk_reward_df),
-        "btn-rolldown": lambda: generate_heatmap(1, roll_down_df),
-        "btn-rollup": lambda: generate_heatmap(1, roll_up_df),
-        "btn-range": lambda: generate_heatmap(1, range_df),
-        "btn-trend": lambda: generate_heatmap(1, regime_df),
+        "btn-price": lambda: generate_heatmap(1, latest_df, color_pref),
+        "btn-percentile": lambda: generate_heatmap(0, percentile_df,color_pref),
+        "btn-zscore": lambda: generate_heatmap(1, zscore_df,color_pref),
+        "btn-riskrewarddiff": lambda: generate_heatmap(1, risk_reward_diff_df,color_pref),
+        "btn-riskreward": lambda: generate_heatmap(1, risk_reward_df,color_pref),
+        "btn-rolldown": lambda: generate_heatmap(1, roll_down_df, color_pref),
+        "btn-rollup": lambda: generate_heatmap(1, roll_up_df, color_pref),
+        "btn-range": lambda: generate_heatmap(1, range_df, color_pref),
+        "btn-trend": lambda: generate_heatmap(1, regime_df, color_pref),
     }
 
     heatmap = None
@@ -1922,13 +1160,13 @@ def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len,
     heatmap = hovertemplate_heatmap(heatmap, latest_df, roll_down_df, roll_up_df, percentile_df)   
     colors_btn_fig_map = {
         #"btn-price_2": lambda: color_heatmap(heatmap, 1, latest_df),
-        "btn-percentile_2": lambda: color_heatmap(heatmap, 0, percentile_df),
-        "btn-zscore_2": lambda: color_heatmap(heatmap, 1, zscore_df),
-        "btn-riskrewarddiff_2": lambda: color_heatmap( heatmap, 1, risk_reward_diff_df),
-        "btn-riskreward_2": lambda: color_heatmap(heatmap, 1, risk_reward_df),
-        "btn-rolldown_2": lambda: color_heatmap(heatmap, 1, roll_down_df),
-        "btn-rollup_2": lambda: color_heatmap(heatmap, 1, roll_up_df),
-        "btn-range": lambda: generate_heatmap(1, range_df),
+        "btn-percentile_2": lambda: color_heatmap(heatmap, 0, percentile_df, color_pref),
+        "btn-zscore_2": lambda: color_heatmap(heatmap, 0, zscore_df, color_pref),
+        "btn-riskrewarddiff_2": lambda: color_heatmap( heatmap, 1, risk_reward_diff_df, color_pref),
+        "btn-riskreward_2": lambda: color_heatmap(heatmap, 1, risk_reward_df, color_pref),
+        "btn-rolldown_2": lambda: color_heatmap(heatmap, 1, roll_down_df, color_pref),
+        "btn-rollup_2": lambda: color_heatmap(heatmap, 1, roll_up_df, color_pref),
+        "btn-range": lambda: generate_heatmap(1, range_df, color_pref),
         #"btn-trend": lambda: generate_heatmap(1, trend_df),
 
     }
@@ -1967,18 +1205,30 @@ def update_tab_heatmap_basic(raw_data_dict,selected_ratio, local_win, curve_len,
     Output('heatmap-details-panel', 'children'),
     Output('heatmap-details-panel', 'style'),
     Input('heatmap-matrix', 'clickData'),
-    State('raw-data-store', 'data'),
+    Input('raw-data-store', 'data'),
     Input('dropdown-ratio', 'value'),
+    Input('curve_length', 'value'),
     State('input-local-window', 'value'),
-    State('input-curve-length', 'value'),
+    State('general-store', 'data'),
     prevent_initial_call=True
 )
-def display_cell_details(click_data, raw_data_dict ,selected_ratio, local_win, curve_len):
+def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, local_win, general_store):
     if click_data is None:
         return dash.no_update, dash.no_update
     
     if not selected_ratio:
         selected_ratio=  {"Out", "S3","S6","L3","L6"} # Return an empty figure
+
+    if general_store is not None:
+        comdty = general_store[0]
+        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+            selected_ratio = ["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
+
+    if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
+        curve_len= DEFAULT_CURVE_LENGTH
+        print("Invalid curve_len in display_cell_details")
+    else:
+        curve_len= DEFAULT_CURVE_LENGTH
     # --- 1. Extract Info from the Clicked Cell ---
     point = click_data['points'][0]
     x_val, y_val = point['x'], point['y']
@@ -2115,20 +1365,10 @@ def warning_plot(warning):
     fig.update_xaxes(fixedrange=True)
     return fig
 
-
-
-# Function to pick port
-def get_free_port(preferred_port, fallback_port):
-    """Try preferred_port, if busy then use fallback_port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        if s.connect_ex(("127.0.0.1", preferred_port)) != 0:
-            return preferred_port  # free
-        else:
-            return fallback_port   # fallback
 # ------------------------------------------------
 # MAIN
 # ------------------------------------------------
 if __name__ == '__main__':
     #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
-    #app.run(debug= True) #self
-    app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
+    app.run(debug= True) #self
+    #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 

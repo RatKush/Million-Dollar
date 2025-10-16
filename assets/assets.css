@@ -221,3 +221,51 @@ div.tab--selected:hover {
 }
 
 
+/*888888888888888888888888888888888888888888888888888888888888888888 hover of str list in footer 88888888888888888888888888888888888888888888888888888888888888888888888888*/
+/* assets/style.css */
+
+/* assets/style.css */
+
+.hover-container {
+  position: relative;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.hover-card {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 100%;
+  z-index: 1200;
+  background-color: #1f2128;
+  color: #c0c4cc;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  width: 480px;            /* visible width of preview */
+  max-height: 400px;       /* fixed height */
+  overflow-y: auto;        /* make text scrollable */
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;   /* preserve line breaks */
+}
+
+/* show on hover or keyboard focus */
+.hover-container:hover .hover-card,
+.hover-container:focus-within .hover-card {
+  display: block;
+}
+
+/* optional highlight when hovering link */
+.hover-link {
+  color: #c0c4cc;
+  margin-right: 10px;
+  text-decoration: none;
+}
+
+.hover-link:hover {
+  color: #ffffff;
+}

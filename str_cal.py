@@ -2,70 +2,56 @@
 import os
 import pandas as pd
 import numpy as np
-import difflib
-from pathlib import Path
+from typing import Optional,Tuple, Dict, Any
 import logging
-from typing import Optional, Union, Tuple, Dict, Any
+from typing import Optional, Tuple
 
 # str_cal.py (top of file)
 DEFAULT_WINDOW = 21
 DEFAULT_OUTLIER_K = 2.5
-DEFAULT_LOOKBACK = 250
-
 ##############################################################
 # DATA LOADING AND PREPROCESSING
 ##############################################################
-# Commodity matching configuration
-COMMODITY_MATCH_POOL = [
-    "SR3_ED", "sr3", "sr1", "so3", "er", "er3", "corra", "szi0", 
-    "meeting", "meet", "sonia", "sofr", "euribor", "meetings", 
-    "sa3", "saron", "vix vs voxx", "vix voxx","vix vs vstoxx", "vix vstoxx",  "vix", "vx", "VOXX", "vol", 
-    "FVS", "fvs", "vstoxx", "eurodollar", "ed"
-]
-
-COMMODITY_MAPPING = {
-    "SR3_ED": "SR3_ED", "sr3": "SR3", "sr1": "SR1", "so3": "S03", 
-    "er": "ER", "er3": "ER", "corra": "CoRRa", "szi0": "SZI0", 
-    "meeting": "meets", "meet": "meets", "sonia": "SO3", "sofr": "SR3", 
-    "euribor": "ER", "meetings": "meets", "sa3": "SA3", "saron": "SA3", 
-    "eurodollar": "ED", "ed": "ED", "vix": "VIX", "vx": "VIX", 
-    "VOXX": "FVS", "FVS": "FVS", "fvs": "FVS", "vstoxx": "FVS", 
-    "vol": "VIX", "vix vs voxx": "VIX-VOXX","vix voxx": "VIX-VOXX", "vix vs vstoxx": "VIX-VOXX", "vix vstoxx": "VIX-VOXX"
-}
-
-
-def extract_comdty(filepath: str) -> str:
-    """Extract commodity identifier from filepath using fuzzy string matching."""
-    if not filepath:
-        return "Unknown"
+def serialize_dataframe(df: pd.DataFrame) -> Dict[str, Any]:
+    """Convert a pandas DataFrame to JSON-serializable dictionary - CORRECTED"""
+    if df is None or df.empty:
+        return {"data": [], "index": [], "columns": []}
     
-    text_lower = filepath.lower().strip()
-      # ✅ Step 1: Exact match check
-    if text_lower in COMMODITY_MAPPING:
-        return COMMODITY_MAPPING[text_lower]
+    # Ensure index is serializable
+    try:
+        index_serialized = df.index.astype(str).tolist()
+    except:
+        index_serialized = list(range(len(df)))
+    
+    return {
+        "data": df.values.tolist(),
+        "index": index_serialized,
+        "columns": df.columns.tolist()
+    }
 
-    # Calculate similarity scores
-    scored_matches = []
-    for pattern in COMMODITY_MATCH_POOL:
-        score = difflib.SequenceMatcher(None, text_lower, pattern).ratio()
-        
-        # Boost if substring match
-        if pattern in text_lower:
-            score += 0.2
-        
-        scored_matches.append((score, pattern))
+def serialize_series(series: pd.Series) -> Dict[str, Any]:
+    """Convert a pandas Series to JSON-serializable dictionary - CORRECTED"""
+    if series is None or series.empty:
+        return {"values": [], "index": []}
     
-    # Get best match
-    scored_matches.sort(reverse=True, key=lambda x: x[0])
-    best_score, best_pattern = scored_matches[0]
+    # Ensure index is serializable
+    try:
+        index_serialized = series.index.astype(str).tolist()
+    except:
+        index_serialized = list(range(len(series)))
     
-    # Return mapped commodity if score good enough
-    if best_score >= 0.4:
-        return COMMODITY_MAPPING.get(best_pattern, best_pattern)
-    
-    # Fallback to filename without extension
-    return Path(filepath).stem
+    return {
+        "values": series.values.tolist(),
+        "index": index_serialized
+    }
 
+
+def get_rank(series, val):
+    series = series.dropna().values
+    if len(series) == 0:
+        return np.nan
+    rank = (np.sum(series < val) + 0.5 * np.sum(series == val)) / len(series)
+    return rank * 100
 
 def process_raw_data(filepath: str, lookback_prd: int) -> pd.DataFrame:
     if not isinstance(filepath, str) or not filepath.strip():
@@ -94,44 +80,6 @@ def process_raw_data(filepath: str, lookback_prd: int) -> pd.DataFrame:
     return processed_df
 
 
-
-def extract_series(str_df: pd.DataFrame, str_number: int = 8, lookback_prd: int = DEFAULT_LOOKBACK):
-    """Extract a time series from structure DataFrame with proper fallbacks."""
-    
-    if str_df.empty:
-        return pd.Series(), "DataFrame is empty"
-        
-    max_cols = str_df.shape[1]
-    max_rows = str_df.shape[0]
-    fallback_msg = None
-    
-    # Adjust str_number if too high
-    if str_number > max_cols:
-        fallback_msg = f"Structure number {str_number} too high. Using {max_cols} instead."
-        str_number = max_cols
-    
-    # Adjust lookback if too high
-    actual_lookback = min(lookback_prd, max_rows)
-    
-    # Extract series (convert to 0-indexed)
-    series = str_df.iloc[:actual_lookback, str_number - 1].copy()
-    
-    # Try to convert index to datetime
-    try:
-        if not isinstance(series.index, pd.DatetimeIndex):
-            # Handle Excel serial dates properly
-            if hasattr(series.index, 'dtype') and pd.api.types.is_numeric_dtype(series.index):
-                series.index = pd.to_datetime(series.index, unit='D', origin='1899-12-30', errors='coerce')
-            else:
-                series.index = pd.to_datetime(series.index, errors='coerce', format='mixed')
-
-    except:
-        pass  # Keep original index if conversion fails
-    
-    # Remove NaN values
-    series = series.dropna()
-    return series, fallback_msg
-
 def process_structure_data(raw_df, comdty, win_local ,str_name):
     if raw_df.empty: 
         return pd.DataFrame(), "Raw data empty"
@@ -155,7 +103,7 @@ def process_structure_data(raw_df, comdty, win_local ,str_name):
 
 
 # fn to build only main series // rater then cal full str_df
-def fn_main_series_only(raw_df,str_name,str_number, comdty, lookback_prd):
+def fn_main_series_only(raw_df,str_name,str_number, comdty, lookback_prd, DEFAULT_WINDOW, DEFAULT_OUTLIER_K):
     ratio= get_ratio(str_name)
     max_row= raw_df.shape[0] #280 i.e.  lookback
     max_col= raw_df.shape[1] #35  i.e. 
@@ -178,34 +126,6 @@ def fn_main_series_only(raw_df,str_name,str_number, comdty, lookback_prd):
     str_main_series = str_main_series.iloc[:actual_lookback]
     return  str_main_series
 
-
-
-def curve_at_datex(out_ser,comdty, str_name, curve_len):
-    if out_ser is None or str_name is None:
-        return {}
-    ratio= get_ratio(str_name)
-    max_col= len(out_ser) #35  i.e. 
-    try:
-        curve_len = int(curve_len)
-    except ValueError:
-        curve_len= min(20, max_col- len(ratio)+1)
-    
-    if curve_len <= 0:
-        return {}
-    
-    if comdty == "SZI0":
-        str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
-    elif str_name == "Out" and comdty in ["meets", "SZI0"]:
-        default_ratio = pd.Series([1.0], index=[0], name="Out")
-        str_curve = (out_ser.rolling(window=len(default_ratio), min_periods=len(default_ratio)).apply(lambda x: np.dot(x, default_ratio), raw=True))
-        str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
-    else:
-        str_curve = str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
-        str_curve= str_curve*100
-        str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
-    str_curve =  str_curve.shift(-(len(ratio)-1))
-    return str_curve[:curve_len]
-    
 
 def fill_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """Fill missing values efficiently using vectorized operations."""
@@ -240,34 +160,7 @@ def fill_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     return df_filled
 
 
-def _apply_rolling_bounds_filter(df: pd.DataFrame, window: int = DEFAULT_WINDOW, k: float = DEFAULT_OUTLIER_K) -> pd.DataFrame:
-    """
-    Apply rolling bounds filter to remove outliers (placeholder implementation).
-    
-    This is a placeholder for the actual rolling_bounds_filter function.
-    In production, this would be replaced with the actual implementation.
-    """
-    try:
-        # Simple outlier filtering using rolling statistics
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        
-        for col in numeric_cols:
-            rolling_mean = df[col].rolling(window=window, center=True).mean()
-            rolling_std = df[col].rolling(window=window, center=True).std()
-            
-            # Define bounds
-            lower_bound = rolling_mean - k * rolling_std
-            upper_bound = rolling_mean + k * rolling_std
-            
-            # Cap outliers
-            df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
-        
-        return df
-        
-    except Exception as e:
-        return df
-
-def load_data(lookback_prd: int, filepath: str = "SR3_ED.xlsm") -> pd.DataFrame:
+def load_data(lookback_prd: int, filepath: str = "SR3_ED_GEN.xlsm") -> pd.DataFrame:
     """Load structured curve data from Excel file."""
     
     # ===== STEP 1: INPUT VALIDATION =====
@@ -446,41 +339,6 @@ def load_data(lookback_prd: int, filepath: str = "SR3_ED.xlsm") -> pd.DataFrame:
         return pd.DataFrame()
 
 ################################################################# outliers removal fn ######################
-#1 removes lower and upper 0.1 percentiles data
-def remove_outliers(df: pd.DataFrame, 
-                    lower_quantile: float = 0.01, 
-                    upper_quantile: float = 0.99) -> pd.DataFrame:
-    """Remove outliers by capping at quantile values."""
-    
-    if df.empty:
-        return df
-    
-    df_cleaned = df.copy()
-    
-    # Get numeric columns only
-    numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
-    
-    if len(numeric_cols) == 0:
-        return df_cleaned
-    
-    # Calculate quantiles
-    q_lower = df_cleaned[numeric_cols].quantile(lower_quantile)
-    q_upper = df_cleaned[numeric_cols].quantile(upper_quantile)
-    
-    # Cap outliers for each column
-    for col in numeric_cols:
-        if q_lower[col] < q_upper[col]:  # Valid quantiles
-            df_cleaned[col] = df_cleaned[col].clip(
-                lower=q_lower[col], 
-                upper=q_upper[col]
-            )
-    
-    # Fill any remaining NaNs
-    df_cleaned = df_cleaned.interpolate(method='linear', limit_direction='both')
-    
-    return df_cleaned
-
-
 ## 2  outliers  for a df  # rolling mean ± k*std.         ### not that robust ----- sometimes outliers hides themselves due to high std causeed by themselves
 def process_series(series, window=DEFAULT_WINDOW , k=DEFAULT_OUTLIER_K, min_periods  = 5):
     series = pd.to_numeric(series, errors='coerce')
@@ -601,11 +459,10 @@ def _rolling_sumproduct(row, ratio):
 # STRUCTURE RATIO DEFINITIONS AND ENGINE
 ##############################################################
 index = [
-    "Out", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
+    "OUT", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
     "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
-    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)",
-    "1X On- 2X On+1", "2X On- 1X On+1", "2X On- 3X On+1", "3X On- 2X On+1", "1X Sn- 2X Sn+1", "2X Sn- 1X Sn+1", "2X Sn- 3X Sn+1", "3X Sn- 2X Sn+1", 
-    
+    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X L6- 2X L6(n+1)", "2X L6- 3X L6(n+1)", "1X L6- 2X L6(n+2)", "2X L6- 3X L6(n+2)",
+    "1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"
 ]
 
 ratio= [
@@ -637,15 +494,20 @@ ratio= [
     [1, -1, -3, 3, 3, -3, -1, 1],               # "E6(I)"   i=25
     [1, 0, -4, 0, 6, 0, -4, 0, 1],              # "E6(II)"  i=26
 
-    [1,-2],                                     # "1X On- 2X On+1"  i=27
-    [2, -1],                                    # "2X On- 1X On+1"  i=28
-    [2, -3],                                    # "2X On- 3X On+1"  i=29
-    [3, -2],                                    # "3X On- 2X On+1"  i=30
+    [1, -2, -2, 4, 1, -2],                      # 1X L6- 2X L6(n+1)  i=27
+    [2, -3, -4, 6, 2, -3],                      # 2X L6- 3X L6(n+1)  i=28
+    [1, 0, -4, 0, 5, 0, -2],                    # 1X L6- 2X L6(n+2)  i=29
+    [2, 0, -7, 0, 8, 0, -3],                    # 2X L6- 3X L6(n+2)  i=30
 
-    [1,-3,2],                                   # "1X Sn- 2X Sn+1"  i=31
-    [2,-3,1],                                   # "2X Sn- 1X Sn+1"  i=32
-    [2,-5,3],                                   # "2X Sn- 3X Sn+1"  i=33
-    [3,-5,2],                                   # "3X Sn- 2X Sn+1"  i=34
+    [1,-2],                                     # "1X On- 2X On+1"  i=31
+    [2, -1],                                    # "2X On- 1X On+1"  i=32
+    [2, -3],                                    # "2X On- 3X On+1"  i=33
+    [3, -2],                                    # "3X On- 2X On+1"  i=34
+
+    [1,-3,2],                                   # "1X S1n- 2X S1n+1"  i=35
+    [2,-3,1],                                   # "2X S1n- 1X S1n+1"  i=36
+    [2,-5,3],                                   # "2X S1n- 3X S1n+1"  i=37
+    [3,-5,2],                                   # "3X S1n- 2X S1n+1"  i=38                 
 ]
 
 ratio_table = pd.DataFrame(ratio, index=index)
@@ -657,7 +519,7 @@ ratio_table = pd.DataFrame(ratio, index=index)
 
 
 ################################### fetch effr ######################################
-def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lookback_prd=DEFAULT_LOOKBACK):
+def fetch_rates_cycle(lookback_prd, filepath= "SR3_ED_GEN.xlsm", sheetname= "treasuries rates"):
     df = pd.read_excel(filepath, sheet_name = sheetname, header= None)
      
     max_cols = min(df.shape[1]-1, lookback_prd+22)
@@ -670,7 +532,7 @@ def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lo
     # final data container
     rates_df= df.iloc[[3,9,15,21]].copy()  # 2Yr, 5Yr, 10Yr, rates
     rates_df.index = ["2Yr", "5Yr", "10Yr", "Rates"]
-    y2y10= (df.iloc[3]- df.iloc[15])*100
+    y2y10= (df.iloc[3]- df.iloc[15])
     rates_df.loc['2y10y'] = y2y10
     rates_df.columns= dates
     for i in range(len(rates_df) - 1): # passing all except rates row
@@ -684,11 +546,11 @@ def fetch_rates_cycle(filepath= "SR3_ED.xlsm", sheetname= "treasuries rates", lo
 
 
 # Helper function for structure calculations  
-def process_help_calculation(comdty, out_df, base_str, lookback_prd, curve_length):
+def process_help_calculation(comdty, out_df, base_str, lookback_prd, curve_length, DEFAULT_WINDOW, DEFAULT_OUTLIER_K ):
     """Helper function for structure calculations"""
     try:
         # ✅ FIXED: process_str_df returns (DataFrame, error_msg) tuple
-        str_df, error_msg = process_str_df(out_df, comdty, base_str)
+        str_df, error_msg = process_str_df(out_df, comdty, base_str, DEFAULT_WINDOW, DEFAULT_OUTLIER_K )
         
         if str_df.empty:
             print(f"Warning: Empty structure DataFrame for {comdty}-{base_str}")
@@ -702,12 +564,13 @@ def process_help_calculation(comdty, out_df, base_str, lookback_prd, curve_lengt
         return pd.DataFrame(), comdty
 
 
-def process_str_df(raw_df: pd.DataFrame, comdty: str, str_name: str) -> Tuple[pd.DataFrame, Optional[str]]:
+def process_str_df(raw_df: pd.DataFrame, comdty: str, str_name: str,DEFAULT_WINDOW, DEFAULT_OUTLIER_K  ) -> Tuple[pd.DataFrame, Optional[str]]:
     if raw_df.empty:
         return pd.DataFrame(), "Raw data empty"
 
     try:
         if comdty == "SZI0":
+
             str_df = calculate_str(raw_df, get_ratio(str_name))
         elif str_name == "Out" and comdty in ["meets", "SZI0"]:
             default_ratio = pd.Series([1.0], index=[0], name="Out")
@@ -722,27 +585,4 @@ def process_str_df(raw_df: pd.DataFrame, comdty: str, str_name: str) -> Tuple[pd
     except Exception as e:
         logging.error(f"process_str_df failed: {e}")
         return pd.DataFrame(), f"ERROR Failed processing {comdty}-{str_name}: {e}"
-# def test_load_data_performance():
-#     """Test the new load_data function performance."""
-#     import time
-    
-#     print("Testing new load_data function...")
-    
-#     # Test with your actual file
-#     start_time = time.time()
-#     df = load_data(100, "SR3_ED.xlsm")  # Replace with your actual filename
-#     end_time = time.time()
-    
-#     print(f" Load time: {end_time - start_time:.2f} seconds")
-#     print(f" Data shape: {df.shape}")
-    
-#     if not df.empty:
-#         print(" New load_data function works!")
-#         print(f" Date range: {df.index} to {df.index[-1]}")
-#         print(f" Columns: {list(df.columns[:5])}...")  # Show first 5 columns
-#     else:
-#         print(" Function returned empty DataFrame")
 
-# # Run the test
-# if __name__ == "__main__":
-#     test_load_data_performance()
