@@ -29,13 +29,7 @@ Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience
 ✅ **Modular Python scripts for easier maintenance**  
 ✅ **Easy to run locally**
 
-Million-Dollar/
-│
-├── dashboard.py            # Main dashboard script
-├── requirements.txt        # Python dependencies
-├── SR3.xlsx                # Sample data file
-├── <other_python_scripts>  # Supporting modules
-└── README.md               # Project documentation
+<img width="439" height="195" alt="image" src="https://github.com/user-attachments/assets/4b4a8097-93cd-4892-871c-b3a3dac005b7" />
 
 - **Pip** (Python package installer)  
 - **Web browser** (Chrome, Edge, Firefox, etc.)
