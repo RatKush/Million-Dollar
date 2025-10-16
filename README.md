@@ -30,14 +30,8 @@ Modular Python scripts for easier maintenance
 
 Easy to run locally
 
-📁 Project Structure
-Million-Dollar/
-│
-├── dashboard.py            # Main dashboard script
-├── requirements.txt        # Python dependencies
-├── SR3.xlsx                # Sample data file
-├── <other_python_scripts>  # Supporting modules
-└── README.md               # Project documentation
+📁 <img width="416" height="199" alt="image" src="https://github.com/user-attachments/assets/b15a8711-3018-4fab-ada3-9faa7b7a5ec3" />
+
 
 🛠️ Prerequisites
 
