@@ -31,8 +31,6 @@ Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience
 
 <img width="439" height="195" alt="image" src="https://github.com/user-attachments/assets/4b4a8097-93cd-4892-871c-b3a3dac005b7" />
 
-- **Pip** (Python package installer)  
-- **Web browser** (Chrome, Edge, Firefox, etc.)
 
 ## Setup Instructions
 
