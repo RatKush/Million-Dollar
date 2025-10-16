@@ -576,8 +576,8 @@ def table_populating_1_2(df, change_period, curve_len_final, str_name):
             valley_levels = series.iloc[[i for i, val in enumerate(peaks_n_valleys) if val == "Valley"]]
             tolerance = 0.5  # for resistance 
             flag = (# Check if latest price is near valley or peak or any resistance or any support
-                "Peak" if maxv- latest_price <= tolerance
-                else "Valley" if minv- latest_price >= -tolerance
+                "Top" if maxv- latest_price <= tolerance
+                else "Bottom" if minv- latest_price >= -tolerance
                 else "Resistance" if any(abs(latest_price - lvl) <= tolerance for lvl in peak_levels)
                 else "Support" if any(abs(latest_price - lvl) <= tolerance for lvl in valley_levels)
                 else "-"
@@ -702,7 +702,6 @@ def table_populating_1_2(df, change_period, curve_len_final, str_name):
                 "std_dev": std_dev,
                 "SparkLine": SparkLine,
                 "Histogram": daily_changes,
-
                 "roll_combined": roll_combined,
                 "risk_reward_combined": risk_reward_combined ,
             })
