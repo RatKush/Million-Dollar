@@ -5,3 +5,4 @@ __pycache__/
 *.pyd
 .tmp.driveupload/
 .env
+*_local.xlsx
