@@ -643,7 +643,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
 
     # 1. Sum of eases/hikes
     if toggle_store.get("btn-ease_hike"):
-        if comdty == "meets":
+        if comdty == "MEETS":
             series_data = cal_sum_of_same_sign_meets(raw_df, comdty, lookback_prd, DEFAULT_WINDOW= DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
         elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ER3"}:
             series_data = cal_sum_of_eases_hikes(raw_df, comdty, lookback_prd, DEFAULT_WINDOW=DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
@@ -1088,7 +1088,7 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
             selected_ratio =["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
@@ -1233,7 +1233,7 @@ def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, lo
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
             selected_ratio = ["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):

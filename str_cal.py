@@ -87,7 +87,7 @@ def process_structure_data(raw_df, comdty, win_local ,str_name):
     try:
         if comdty == "SZI0":
             str_df = calculate_str(raw_df, get_ratio(str_name))
-        elif str_name == "Out" and comdty in ["meets", "SZI0"]:
+        elif str_name == "Out" and comdty in ["MEETS", "SZI0"]:
             default_ratio = pd.Series([1.0], index=[0], name="Out")
             str_df = calculate_str(raw_df, default_ratio)
             str_df = rolling_bounds_filter(str_df, window=win_local, k=DEFAULT_OUTLIER_K)
@@ -112,7 +112,7 @@ def fn_main_series_only(raw_df,str_name,str_number, comdty, lookback_prd, DEFAUL
         str_main_series= pd.Series()
     if comdty == "SZI0":
         str_main_series = pd.Series(raw_df.iloc[:, str_number-1:str_number-1+len(ratio)].values @ np.array(ratio),index=raw_df.index)
-    elif str_name == "Out" and comdty in ["meets", "SZI0"]:
+    elif str_name == "Out" and comdty in ["MEETS", "SZI0"]:
         default_ratio = pd.Series([1.0], index=[0], name="Out")
         str_main_series = pd.Series(raw_df.iloc[:, str_number-1:str_number-1+len(default_ratio)].values @ np.array(default_ratio),index=raw_df.index)
         str_main_series = rolling_bounds_filter(str_main_series, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
@@ -572,7 +572,7 @@ def process_str_df(raw_df: pd.DataFrame, comdty: str, str_name: str,DEFAULT_WIND
         if comdty == "SZI0":
 
             str_df = calculate_str(raw_df, get_ratio(str_name))
-        elif str_name == "Out" and comdty in ["meets", "SZI0"]:
+        elif str_name == "Out" and comdty in ["MEETS", "SZI0"]:
             default_ratio = pd.Series([1.0], index=[0], name="Out")
             str_df = calculate_str(raw_df, default_ratio)
             str_df = rolling_bounds_filter(str_df, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)

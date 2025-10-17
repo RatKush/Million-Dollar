@@ -221,7 +221,7 @@ def curve_at_datex(out_ser,comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_
     
     if comdty == "SZI0":
         str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
-    elif str_name == "Out" and comdty in ["meets", "SZI0"]:
+    elif str_name == "Out" and comdty in ["MEETS", "SZI0"]:
         default_ratio = pd.Series([1.0], index=[0], name="Out")
         str_curve = (out_ser.rolling(window=len(default_ratio), min_periods=len(default_ratio)).apply(lambda x: np.dot(x, default_ratio), raw=True))
         str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)

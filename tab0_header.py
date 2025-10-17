@@ -98,7 +98,7 @@ COMMODITY_GROUPS = {
     "CRA": {"corra", "corra_gen", "cra"},
     "SA3": {"sa3", "saron", "SA3_GEN"},
     "SZI0": {"szi0", "SZIO_GEN"},
-    "meets": {"meeting", "meet", "meetings"},
+    "MEETS": {"meeting", "meet", "meetings", "meets", "MEETS_GEN", "fomc"},
     "VIX": {"vix", "vx", "vol"},
     "FVS": {"VOXX", "FVS", "fvs", "vstoxx", "vstox", "vox"},
     "VIX-VOX": {
