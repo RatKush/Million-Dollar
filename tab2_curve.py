@@ -306,14 +306,16 @@ def plot_single_structure(series, str_name):
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+         spikedash='solid'
     )
     fig.update_yaxes(
         showspikes=True,
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+        spikedash='solid'
     )
     fig.update_layout(
         #title=dict(text=title, x=0.5, y=0.90, xanchor="center"), font=dict(size=14,  color= "#1f2128")
@@ -402,14 +404,16 @@ def plot_chart_2_2():
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+         spikedash='solid'
     )
     fig.update_yaxes(
         showspikes=True,
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+         spikedash='solid'
     )
     fig.update_layout(
         height=450,
@@ -626,7 +630,8 @@ def plot_chart_2_3():
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+         spikedash='solid'
     )
     fig.update_yaxes(
         showgrid=True,
@@ -636,7 +641,8 @@ def plot_chart_2_3():
         spikemode='across',
         spikecolor='grey',
         spikethickness=1,
-        spikesnap='cursor'
+        spikesnap='cursor',
+         spikedash='solid'
     )
     fig.update_layout(
         height=450,
