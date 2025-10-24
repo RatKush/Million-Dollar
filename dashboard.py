@@ -915,12 +915,12 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
 
 # ############################################## tab 7 ############################################################################
 #computed 3d df  storing in cache memory 
-def cached_compute_3d_df(df_hash: str, local_win: int, curve_len: int, raw_df):
+def cached_compute_3d_df(comdty, df_hash: str, local_win: int, curve_len: int, raw_df):
     @cache.memoize()
-    def _inner(df_hash, local_win, curve_len):
+    def _inner(df_hash, local_win, curve_len, comdty):
         print(f"Cache miss → computing 3D df (win={local_win}, len={curve_len})")
-        return compute_3d_structure(raw_df, local_win=local_win, curve_length=curve_len)
-    return _inner(df_hash, local_win, curve_len)
+        return compute_3d_structure(comdty, raw_df, local_win=local_win, curve_length=curve_len)
+    return _inner( df_hash, local_win, curve_len, comdty)
 
 
 
@@ -1087,11 +1087,11 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
         return warning_plot("⚠ data not available (no stored data)"), time.time()
 
     if not selected_ratio:
-        selected_ratio=  ["Out", "S3","S6","L3","L6"] # Return an empty figure
+        selected_ratio=  ["OUT", "S3","S6","L3","L6"] # Return an empty figure
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOX", "SZI0"}:
             selected_ratio =["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
@@ -1127,7 +1127,7 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
     meta = f"{raw_df.shape}".encode()
     df_quick_hash = hashlib.md5(first_row + last_row + meta).hexdigest()
 
-    str_data_3d = cached_compute_3d_df(df_quick_hash, local_win, curve_len, raw_df)
+    str_data_3d = cached_compute_3d_df(comdty, df_quick_hash, local_win, curve_len, raw_df)
 
     if not isinstance(str_data_3d.index, pd.MultiIndex) or "Structure" not in str_data_3d.index.names:
         print("⚠ Unexpected structure in cached_compute_3d_df output")
@@ -1236,7 +1236,7 @@ def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, lo
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOX", "SZI0"}:
             selected_ratio = ["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
@@ -1271,7 +1271,7 @@ def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, lo
     meta = f"{raw_df.shape}".encode()
     df_quick_hash = hashlib.md5(first_row + last_row + meta).hexdigest()
 
-    str_data_3d = cached_compute_3d_df(df_quick_hash, local_win, curve_len, raw_df)
+    str_data_3d = cached_compute_3d_df(comdty, df_quick_hash, local_win, curve_len, raw_df)
     filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
     clicked_series=  filtered_3d_df.loc[(slice(None), x_val, y_val)]
     prev_val, next_val= get_adjacent_values( filtered_3d_df,  x_val, y_val)
@@ -1398,4 +1398,3 @@ if __name__ == '__main__':
     #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
     #app.run(debug= True) #self
     app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
-
