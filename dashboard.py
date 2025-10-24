@@ -10,6 +10,7 @@ from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 from flask_caching import Cache
 import plotly.graph_objects as go
+import hashlib
 
 # 1. THE ENTERPRISE SCRIPT for adding sprakline in table
 external_scripts = ["https://cdn.jsdelivr.net/npm/ag-grid-enterprise/dist/ag-grid-enterprise.min.js"]
@@ -177,9 +178,10 @@ def set_custom_lookback(search_value, current_value):
     [Input('filename', 'value'),
     Input('str_name', 'value'),
     Input('str_number', 'value'),
-    Input('lookback_prd', 'value')],
+    Input('lookback_prd', 'value'),
+    Input('load-btn', 'n_clicks')],
     prevent_initial_call= False)
-def general_info(filename, str_name, str_num, lookback_prd):
+def general_info(filename, str_name, str_num, lookback_prd, n_clicks):
     if not filename or not str_name or not  str_num or not  lookback_prd :
         raise PreventUpdate # don’t update store if no file chosen
 
@@ -195,10 +197,11 @@ def general_info(filename, str_name, str_num, lookback_prd):
 ######################## populatintg comodity #################################################
 @callback(
     Output('comdty', 'value'),
-    Input('general-store', 'data'),
+    [Input('general-store', 'data'),
+    Input('load-btn', 'n_clicks')],
     prevent_initial_call=False,
 )
-def update_comdty_input(general_data: list) -> str:
+def update_comdty_input(general_data: list, n_clicks) -> str:
     """Updates the commodity input field based on the stored commodity data."""
     if not general_data or len(general_data) < 1:
         return ""
@@ -209,10 +212,11 @@ def update_comdty_input(general_data: list) -> str:
     [Output('raw-data-store', 'data'),
     Output('dt_latest', 'value')],
     [Input('filename', 'value'),
-     Input('lookback_prd', 'value')],
+     Input('lookback_prd', 'value'),
+     Input('load-btn', 'n_clicks')],
      prevent_initial_call=False,
 )
-def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, Any]:
+def extract_raw_data(filename: str, lookback_prd: Union[str, int], n_clicks) -> Dict[str, Any]:
     """CORRECTED: Extract raw data callback - simplified validation"""
     # Basic validation - return empty if invalid inputs
     if not filename or not lookback_prd:
@@ -642,9 +646,9 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
 
     # 1. Sum of eases/hikes
     if toggle_store.get("btn-ease_hike"):
-        if comdty == "meets":
+        if comdty == "MEETS":
             series_data = cal_sum_of_same_sign_meets(raw_df, comdty, lookback_prd, DEFAULT_WINDOW= DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
-        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ESTR"}:
+        elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ER3"}:
             series_data = cal_sum_of_eases_hikes(raw_df, comdty, lookback_prd, DEFAULT_WINDOW=DEFAULT_WINDOW, DEFAULT_OUTLIER_K= DEFAULT_OUTLIER_K)
         else:
             series_data = pd.Series(dtype='float64')
@@ -778,9 +782,12 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     prevent_initial_call=True
 )
 def classify_and_store(stored_raw, stored_ser, base_str, sum_first_n_base, hike_threshold, ease_threshold, general_store):
+    if base_str is None or sum_first_n_base is None or hike_threshold is None or ease_threshold is None:
+        raise PreventUpdate
+
     if general_store is not None:
         comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
-        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA", "ESTR"}:
+        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA",  "ER3"}:
             return None
 
     if not stored_raw or not stored_ser:
@@ -788,7 +795,7 @@ def classify_and_store(stored_raw, stored_ser, base_str, sum_first_n_base, hike_
     #print(base_str, sum_first_n_base, hike_threshold, ease_threshold)
     if any in {base_str, sum_first_n_base, hike_threshold, ease_threshold} is None:
         raise PreventUpdate
-    if base_str not in {"Out", "S3", "S6", "S12", "L6", "L3"}:
+    if base_str not in {"OUT", "S3", "S6", "S12", "L6", "L3"}:
         raise PreventUpdate
     if sum_first_n_base< 1:
         raise PreventUpdate
@@ -859,7 +866,7 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
 
     if general_store is not None:
         comdty,str_name, str_num,lookback_prd= general_store[0], general_store[1],general_store[2],general_store[3]
-        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA", "ESTR"}:
+        if comdty not in {"SR3", "SO3", "ER", "SA3", "CRA",  "ER3"}:
             return warning_all(f"Not applicable for {comdty} commodity")
 
 
@@ -885,9 +892,9 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
         sideways_fig= warning_plot("⚠ No 'Sideways' cycle data available")
 
 
-    hike_title= f"{comdty}{str_name}({str_num}) in Hike Cycle- {len(hike_series) if (hike_series is not None) else 0} pts"
-    ease_title= f"{comdty}{str_name}({str_num}) in Ease Cycle- {len(ease_series) if (ease_series is not None) else 0} pts"    
-    sideways_title= f"{comdty}{str_name}({str_num}) in Sideways Cycle- {len(sideways_series) if (sideways_series is not None) else 0} pts"       
+    hike_title= f"{comdty} {str_name}({str_num}) in Hike Cycle- {len(hike_series) if (hike_series is not None) else 0} pts"
+    ease_title= f"{comdty} {str_name}({str_num}) in Ease Cycle- {len(ease_series) if (ease_series is not None) else 0} pts"    
+    sideways_title= f"{comdty} {str_name}({str_num}) in Sideways Cycle- {len(sideways_series) if (sideways_series is not None) else 0} pts"       
     
     hike_fig= plotted_sub_KDE( plot_flags=plot_flags, sub_series= hike_series, title= hike_title, cycle_name= "Hike",
         latest_val= latest_val,
@@ -1084,7 +1091,7 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
             selected_ratio =["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
@@ -1106,7 +1113,7 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
     if raw_df is None or raw_df.empty:
         raise PreventUpdate  # or handle gracefully
     
-    import hashlib
+    
 
     # inline hashing try quick hash
         # --- 2. Create quick hash AFTER DataFrame exists ---
@@ -1200,6 +1207,14 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
     
 
 #################### side detail panel ###########
+
+@app.callback(
+    Output('heatmap-matrix', 'clickData'),
+    Input('raw-data-store', 'data'),
+    prevent_initial_call=True
+)
+def clear_click_data_on_dataset_change(_):
+    return  None
 # Inside the display_cell_details callback...
 @app.callback(
     Output('heatmap-details-panel', 'children'),
@@ -1221,7 +1236,7 @@ def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, lo
 
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "meets", "FVS", "VIX-VOXX"}:
+        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOXX"}:
             selected_ratio = ["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
 
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
@@ -1246,7 +1261,17 @@ def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, lo
     if raw_df is None:
         raise PreventUpdate  # or handle gracefully
 
-    str_data_3d = cached_compute_3d_df(raw_df, local_win, curve_len)
+    try:
+        first_row = raw_df.iloc[0].to_numpy().tobytes() if len(raw_df) > 0 else b''
+        last_row = raw_df.iloc[-1].to_numpy().tobytes() if len(raw_df) > 0 else b''
+    except Exception:
+        first_row = str(raw_df.iloc[0].tolist()).encode() if len(raw_df) > 0 else b''
+        last_row= str(raw_df.iloc[-1].tolist()).encode() if len(raw_df) > 0 else b''
+
+    meta = f"{raw_df.shape}".encode()
+    df_quick_hash = hashlib.md5(first_row + last_row + meta).hexdigest()
+
+    str_data_3d = cached_compute_3d_df(df_quick_hash, local_win, curve_len, raw_df)
     filtered_3d_df = str_data_3d[str_data_3d.index.get_level_values('Structure').isin(selected_ratio)]
     clicked_series=  filtered_3d_df.loc[(slice(None), x_val, y_val)]
     prev_val, next_val= get_adjacent_values( filtered_3d_df,  x_val, y_val)
@@ -1265,6 +1290,7 @@ def hide_details_panel(n_clicks):
     if not n_clicks:
         raise PreventUpdate
     return {'display': 'none'}
+
 
 
 ##################################################### footer callback ####################################################    
@@ -1369,6 +1395,6 @@ def warning_plot(warning):
 # MAIN
 # ------------------------------------------------
 if __name__ == '__main__':
-    #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
+    app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
     #app.run(debug= True) #self
-    app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
+    #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 

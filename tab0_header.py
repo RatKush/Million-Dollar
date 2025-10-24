@@ -1,7 +1,7 @@
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 import socket
-import difflib
+from difflib import SequenceMatcher
 from pathlib import Path
 import os
 lookback_options=[
@@ -29,7 +29,8 @@ def create_header_component(filename_options, default_filename, default_comdty, 
                 options=filename_options,
                 value=default_filename,
                 clearable=False,
-                className='form-control'
+                className='form-control',
+                maxHeight=310,
             )
         ]),
         dbc.Col([
@@ -53,7 +54,8 @@ def create_header_component(filename_options, default_filename, default_comdty, 
                 options=index,
                 value="L6",
                 clearable=False,
-                className='form-control'
+                className='form-control',
+                maxHeight=310,
             )
         ]),
         dbc.Col([
@@ -73,11 +75,12 @@ def create_header_component(filename_options, default_filename, default_comdty, 
                 clearable=False,       # optional
                 placeholder="Select or type days...",
                 className='form-control',   # ✅ match existing header styling
+                maxHeight=310,
             )
         ]),
         dbc.Col([
             html.Label(" "),
-            dbc.Button("Load", id='load-btn', color='primary', className='mt-4')
+            dbc.Button("Load", id='load-btn', color='primary', className='mt-4', n_clicks=0)
         ])
     ], className='mb-4')
     
@@ -86,54 +89,59 @@ def create_header_component(filename_options, default_filename, default_comdty, 
 
 
 # Commodity matching configuration
-COMMODITY_MATCH_POOL = [
-    "SR3_ED_GEN", "SR3_ED", "sr3", "sr1", "so3", "er", "er3","ER_GEN", "corra", "szi0", 
-    "meeting", "meet", "sonia", "SO3_GEN", "sofr", "euribor", "meetings", 
-    "sa3", "saron", "vix vs voxx", "vix voxx","vix vs vstoxx", "vix vstoxx",  "vix", "vx", "VOXX", "vol", 
-    "FVS", "fvs", "vstoxx", "eurodollar", "ed"
-]
-
-COMMODITY_MAPPING = {
-    "SR3_ED_GEN": "SR3", "SR3_ED": "SR3_ED", "sr3": "SR3", "sr1": "SR1", "so3": "S03",  "SO3_GEN":"S03",
-    "er": "ER", "er3": "ER","ER_GEN": "ER", "corra": "CoRRa", "szi0": "SZI0", 
-    "meeting": "meets", "meet": "meets", "sonia": "SO3", "sofr": "SR3", 
-    "euribor": "ER", "meetings": "meets", "sa3": "SA3", "saron": "SA3", 
-    "eurodollar": "ED", "ed": "ED", "vix": "VIX", "vx": "VIX", 
-    "VOXX": "FVS", "FVS": "FVS", "fvs": "FVS", "vstoxx": "FVS", 
-    "vol": "VIX", "vix vs voxx": "VIX-VOXX","vix voxx": "VIX-VOXX", "vix vs vstoxx": "VIX-VOXX", "vix vstoxx": "VIX-VOXX"
+COMMODITY_GROUPS = {
+    "SR3": {"SR3_ED_GEN", "SR3_ED", "sr3", "sofr", "SR3", "eurodollar", "ed"},
+    "SR1": {"sr1", "SR1_GEN"},
+    "SO3": {"so3", "SO3_GEN", "sonia"},
+    "ER": {"euribor", "er", "ER_GEN", "Euro"},
+    "ER3": {"er3", "ESTR", "ESTR_GEN", "ER3_GEN"},
+    "CRA": {"corra", "corra_gen", "cra"},
+    "SA3": {"sa3", "saron", "SA3_GEN"},
+    "SZI0": {"szi0", "SZIO_GEN"},
+    "MEETS": {"meeting", "meet", "meetings", "meets", "MEETS_GEN", "fomc"},
+    "VIX": {"vix", "vx", "vol"},
+    "FVS": {"VOXX", "FVS", "fvs", "vstoxx", "vstox", "vox"},
+    "VIX-VOX": {
+        "vix vs voxx", "vix voxx", "vix vs vstoxx", "vix vstoxx", "vix vs voxx", "vix voxx", "vix vs vstoxx", "vix vstoxx", "vix-voxx", "vix-voxx",
+        "vx vs vox", "vx vox", "vx vs vstox", "vx vstox", "vx vs vox", "vx vox", "vx vs vstox", "vx vstox", "vx-vox", "vx-vox",
+        "vix vs fvs", "vix fvs", "vix vs fvs", "vix fvs", "vix vs fvs", "vix fvs", "vix vs fvs", "vix fvs", "vix-fvs", "vix-fvs",
+        "vx vs fvs", "vx fvs", "vx vs fvs", "vx fvs", "vx vs fvs", "vx fvs", "vx vs fvs", "vx fvs", "vx-fvs", "vx-fvs",
+    },
 }
 
 
+COMMODITY_MAPPING = {alias.lower(): key for key, aliases in COMMODITY_GROUPS.items() for alias in aliases}
+# Create match pool for fuzzy search
+COMMODITY_MATCH_POOL = list(COMMODITY_MAPPING.keys())
+
+# ======================
+# Extract commodity function
+# ======================
 def extract_comdty(filepath: str) -> str:
     """Extract commodity identifier from filepath using fuzzy string matching."""
     if not filepath:
         return "Unknown"
     
     text_lower = filepath.lower().strip()
-      # ✅ Step 1: Exact match check
+    
+    # Exact match first
     if text_lower in COMMODITY_MAPPING:
         return COMMODITY_MAPPING[text_lower]
 
-    # Calculate similarity scores
+    # Fuzzy match
     scored_matches = []
     for pattern in COMMODITY_MATCH_POOL:
-        score = difflib.SequenceMatcher(None, text_lower, pattern).ratio()
-        
-        # Boost if substring match
+        score = SequenceMatcher(None, text_lower, pattern).ratio()
         if pattern in text_lower:
             score += 0.2
-        
         scored_matches.append((score, pattern))
     
-    # Get best match
     scored_matches.sort(reverse=True, key=lambda x: x[0])
     best_score, best_pattern = scored_matches[0]
     
-    # Return mapped commodity if score good enough
     if best_score >= 0.4:
         return COMMODITY_MAPPING.get(best_pattern, best_pattern)
     
-    # Fallback to filename without extension
     return Path(filepath).stem
 
 
