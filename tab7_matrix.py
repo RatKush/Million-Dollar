@@ -368,7 +368,7 @@ def handle_outliers(series: pd.Series, window_size: int, threshold: float, metho
 
 
 
-def compute_3d_structure(out_df: pd.DataFrame, structure_names= all_strs , local_win=21, curve_length=20 ) -> pd.DataFrame:
+def compute_3d_structure(comdty, out_df: pd.DataFrame, structure_names= all_strs , local_win=21, curve_length=20 ) -> pd.DataFrame:
     """
     Efficiently compute a MultiIndex DataFrame with shape (Date, Structure, Contract).
     - Z axis: Dates (depth)
@@ -407,7 +407,10 @@ def compute_3d_structure(out_df: pd.DataFrame, structure_names= all_strs , local
                                   method='replace').to_numpy()
 
             # Convolution (sliding dot product)
-            conv = np.convolve(row, weights[::-1], mode="valid") * 100
+            if(comdty in ["MEETS", "SZI0", "VIX-VOX"] and struct != "OUT"):
+                conv = np.convolve(row, weights[::-1], mode="valid")
+            else:
+                conv = np.convolve(row, weights[::-1], mode="valid") * 100
             result = np.full(n_contracts, np.nan)
             result[: len(conv)] = conv
 

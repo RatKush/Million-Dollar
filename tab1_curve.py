@@ -221,12 +221,19 @@ def curve_at_datex(out_ser,comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_
     
     if comdty == "SZI0":
         str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
-    elif str_name == "Out" and comdty in ["MEETS", "SZI0"]:
-        default_ratio = pd.Series([1.0], index=[0], name="Out")
+        if(str_name == "OUT"):
+            str_curve= str_curve*100
+    elif str_name == "OUT" and comdty in ["MEETS"]:
+        default_ratio = pd.Series([100], index=[0], name="OUT")
         str_curve = (out_ser.rolling(window=len(default_ratio), min_periods=len(default_ratio)).apply(lambda x: np.dot(x, default_ratio), raw=True))
         str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
+        #print(str_curve)
+    # elif str_name != "OUT" and comdty in ["VIX", "FVS", "VIX-VOX"]:
+    #     ratio = get_ratio(str_name)
+    #     str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
+    #     str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
     else:
-        str_curve = str_curve = (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
+        str_curve =  (out_ser.rolling(window=len(ratio), min_periods=len(ratio)).apply(lambda x: np.dot(x, ratio), raw=True))
         str_curve= str_curve*100
         str_curve = rolling_bounds_filter(str_curve, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
     str_curve =  str_curve.shift(-(len(ratio)-1))
@@ -718,23 +725,23 @@ def table_populating_1_2(df, change_period, curve_len_final, str_name):
     
     columnDefs = [
         {"field": "Contract", "headerName": f"{str_name}",  "filter": "agTextColumnFilter", "maxWidth": 125, "pinned": "left"},
-        {"field": "Latest Price", "headerName": "Latest Price",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.2f')(params.value)"} ,"maxWidth": 125, "headerTooltip": "Latest Price", "pinned": "left"},
-        {"field": "Last Settle", "headerName": "Last Settle",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 125, "headerTooltip":"Last Settle", "hide": True},
-        {"field": "CoD", "headerName": "CoD",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 100, "headerTooltip": "Change of day"},
+        {"field": "Latest Price", "headerName": "Latest Price",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.2f')(params.value)"} ,"maxWidth": 125, "headerTooltip": "Latest Price", "pinned": "left", "filter": False},
+        {"field": "Last Settle", "headerName": "Last Settle",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 125, "headerTooltip":"Last Settle", "hide": True, "filter": False},
+        {"field": "CoD", "headerName": "CoD",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 100, "headerTooltip": "Change of day", "filter": False},
         {"field": "% Change", "headerName": "% Change", "type": "numericColumn", "valueFormatter": {"function": "params.value == null ? '' : d3.format('+.0f')(params.value)"}, "maxWidth": 125, "headerTooltip":"% Change"},
         {"field": "percentile_rank", "headerName": "Rank",  "type": "numericColumn", "valueFormatter": {"function": "params.value == null ? '' : d3.format(',.0f')(params.value)"}, "maxWidth": 120, "headerTooltip":f"Percentile rank in {change_period}d"},
         {"field": "z_score", "headerName": "Z Score",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120,"headerTooltip": f"Z Score of {change_period}d"},
-        {"field": "roll_combined", "headerName": "Roll (Dn|Up)",  "type": "stringColumn", "maxWidth": 150, "headerTooltip": "Roll Dn | Up"},
-        {"field": "risk_reward_combined", "headerName": "R/R (ratio|Diff)",  "type": "stringColumn", "maxWidth": 125, "headerTooltip": "Risk/ Reward Ratio | Diff"},
+        {"field": "roll_combined", "headerName": "Roll (Dn|Up)",  "type": "stringColumn", "maxWidth": 150, "headerTooltip": "Roll Dn | Up", "filter": False},
+        {"field": "risk_reward_combined", "headerName": "R/R (ratio|Diff)",  "type": "stringColumn", "maxWidth": 125, "headerTooltip": "Risk/ Reward Ratio | Diff", "filter": False},
         {"field": "rangev", "headerName": "Range", "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 115, "headerTooltip": f"Range of {change_period}d"},
         {"field": "trend", "headerName": "Trend",  "type": "stringColumn", "maxWidth": 125, "headerTooltip": "Trend"},
         {"field": "peaks_n_valleys", "headerName": "Extremum",  "type": "stringColumn","maxWidth": 125, "headerTooltip": "Support | Resistance"},
-        {"field": "SparkLine","headerName": f"SparkLine","cellRenderer": "agSparklineCellRenderer","cellRendererParams": {"sparklineOptions": {"type": "line","line": {"stroke": "#66c2a5", "strokeWidth": 2},"axis": {"stroke": "rgba(255, 255, 255, 1)", "strokeWidth": 3}}}, "minWidth": 250},
-        {"field": "Histogram","headerName": f"Daily Change","cellRenderer": "agSparklineCellRenderer","cellRendererParams": {"sparklineOptions": {"type": "column", "fill": 'grey',"stroke": "#fc8d62","highlightStyle": {"fill": "#e34a33",  "stroke": None },"axis": {"stroke": "rgba(255, 255, 255, 0.5)", "strokeWidth": 0.2}}}, "minWidth": 250},
-        {"field": "max", "headerName": "Max",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": f"Max of {change_period}d" },
-        {"field": "min", "headerName": "Min",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": f"Min of {change_period}d" },
-        {"field": "med", "headerName": "Med",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": "Median"},
-        {"field": "mean", "headerName": "Mean",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": "Mean"},
+        {"field": "SparkLine","headerName": f"SparkLine","cellRenderer": "agSparklineCellRenderer","cellRendererParams": {"sparklineOptions": {"type": "line","line": {"stroke": "#66c2a5", "strokeWidth": 2},"axis": {"stroke": "rgba(255, 255, 255, 1)", "strokeWidth": 3}}}, "minWidth": 250, "filter": False},
+        {"field": "Histogram","headerName": f"Daily Change","cellRenderer": "agSparklineCellRenderer","cellRendererParams": {"sparklineOptions": {"type": "column", "fill": 'grey',"stroke": "#fc8d62","highlightStyle": {"fill": "#e34a33",  "stroke": None },"axis": {"stroke": "rgba(255, 255, 255, 0.5)", "strokeWidth": 0.2}}}, "minWidth": 250, "filter": False},
+        {"field": "max", "headerName": "Max",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": f"Max of {change_period}d", "filter": False },
+        {"field": "min", "headerName": "Min",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": f"Min of {change_period}d" , "filter": False},
+        {"field": "med", "headerName": "Med",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": "Median", "filter": False},
+        {"field": "mean", "headerName": "Mean",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": "Mean", "filter": False},
         {"field": "std_dev", "headerName": "Std dev",  "type": "numericColumn", "valueFormatter": {"function": "d3.format(',.1f')(params.value)"}, "maxWidth": 120, "headerTooltip": "Std dev"},
         
     ]
