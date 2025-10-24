@@ -307,7 +307,7 @@ def plot_single_structure(series, str_name):
         spikecolor='grey',
         spikethickness=1,
         spikesnap='cursor',
-         spikedash='solid'
+        spikedash='solid'
     )
     fig.update_yaxes(
         showspikes=True,
@@ -405,7 +405,7 @@ def plot_chart_2_2():
         spikecolor='grey',
         spikethickness=1,
         spikesnap='cursor',
-         spikedash='solid'
+        spikedash='solid'
     )
     fig.update_yaxes(
         showspikes=True,
@@ -413,7 +413,7 @@ def plot_chart_2_2():
         spikecolor='grey',
         spikethickness=1,
         spikesnap='cursor',
-         spikedash='solid'
+        spikedash='solid'
     )
     fig.update_layout(
         height=450,
@@ -631,7 +631,7 @@ def plot_chart_2_3():
         spikecolor='grey',
         spikethickness=1,
         spikesnap='cursor',
-         spikedash='solid'
+        spikedash='solid'
     )
     fig.update_yaxes(
         showgrid=True,
@@ -642,7 +642,7 @@ def plot_chart_2_3():
         spikecolor='grey',
         spikethickness=1,
         spikesnap='cursor',
-         spikedash='solid'
+        spikedash='solid'
     )
     fig.update_layout(
         height=450,

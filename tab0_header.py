@@ -80,7 +80,7 @@ def create_header_component(filename_options, default_filename, default_comdty, 
         ]),
         dbc.Col([
             html.Label(" "),
-            dbc.Button("Load", id='load-btn', color='primary', className='mt-4')
+            dbc.Button("Load", id='load-btn', color='primary', className='mt-4', n_clicks=0)
         ])
     ], className='mb-4')
     

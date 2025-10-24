@@ -178,9 +178,10 @@ def set_custom_lookback(search_value, current_value):
     [Input('filename', 'value'),
     Input('str_name', 'value'),
     Input('str_number', 'value'),
-    Input('lookback_prd', 'value')],
+    Input('lookback_prd', 'value'),
+    Input('load-btn', 'n_clicks')],
     prevent_initial_call= False)
-def general_info(filename, str_name, str_num, lookback_prd):
+def general_info(filename, str_name, str_num, lookback_prd, n_clicks):
     if not filename or not str_name or not  str_num or not  lookback_prd :
         raise PreventUpdate # don’t update store if no file chosen
 
@@ -196,10 +197,11 @@ def general_info(filename, str_name, str_num, lookback_prd):
 ######################## populatintg comodity #################################################
 @callback(
     Output('comdty', 'value'),
-    Input('general-store', 'data'),
+    [Input('general-store', 'data'),
+    Input('load-btn', 'n_clicks')],
     prevent_initial_call=False,
 )
-def update_comdty_input(general_data: list) -> str:
+def update_comdty_input(general_data: list, n_clicks) -> str:
     """Updates the commodity input field based on the stored commodity data."""
     if not general_data or len(general_data) < 1:
         return ""
@@ -210,10 +212,11 @@ def update_comdty_input(general_data: list) -> str:
     [Output('raw-data-store', 'data'),
     Output('dt_latest', 'value')],
     [Input('filename', 'value'),
-     Input('lookback_prd', 'value')],
+     Input('lookback_prd', 'value'),
+     Input('load-btn', 'n_clicks')],
      prevent_initial_call=False,
 )
-def extract_raw_data(filename: str, lookback_prd: Union[str, int]) -> Dict[str, Any]:
+def extract_raw_data(filename: str, lookback_prd: Union[str, int], n_clicks) -> Dict[str, Any]:
     """CORRECTED: Extract raw data callback - simplified validation"""
     # Basic validation - return empty if invalid inputs
     if not filename or not lookback_prd:
