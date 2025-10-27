@@ -9,16 +9,14 @@ lookback_options=[
     {'label': '6 Mo (125)', 'value': 125},
     {'label': '1 Yr (250)', 'value': 250},
     {'label': '2 Yrs (500)', 'value': 500},
+    {'label': '3 Yrs (750)', 'value': 750},
+    {'label': '4 Yrs (1000)', 'value': 1000},
     {'label': '5 Yrs (1250)', 'value': 1250},
+    {'label': '7 Yrs (1750)', 'value': 1750},
     {'label': '10 Yrs (2500)', 'value': 2500},
     {'label': '15 Yrs (3750)', 'value': 3750},
     {'label': '20 Yrs (5000)', 'value': 5000},
     {'label': 'All', 'value': 10000},
-    {'label': '3 Yr (750)', 'value': 750},
-    {'label': '4 Yrs (1000)', 'value': 1000},
-    {'label': '8 Yrs (2000)', 'value': 2000},
-    {'label': '12 Yrs (3000)', 'value': 3000},
-
 ]
 def create_header_component(filename_options, default_filename, default_comdty, DEFAULT_CURVE_LENGTH, DEFAULT_LOOKBACK, index):
     header_component=dbc.Row([
@@ -87,7 +85,8 @@ def create_header_component(filename_options, default_filename, default_comdty, 
                 dbc.Col(
                     dcc.Input(
                         id='lookback_custom',
-                        type='text',
+                        type='number',
+                        min=11,
                         placeholder="Custom...",
                         debounce=True,
                         style={
