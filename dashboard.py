@@ -130,6 +130,7 @@ app.layout = dbc.Container([
     html.Hr(),
     footer_component, 
 
+    dcc.Store(id='lookback_prd', storage_type='session', data=DEFAULT_LOOKBACK),
     dcc.Store(id='raw-data-store', storage_type='session'),
     dcc.Store(id='general-store', data=[default_comdty, DEFAULT_STR_NAME, DEFAULT_STR_NO, DEFAULT_LOOKBACK], storage_type='session'),
     #dcc.Store(id="dt_latest", storage_type='session'),
@@ -147,30 +148,34 @@ app.layout = dbc.Container([
 # CALLBACK: Load & Process raw data (outright) and Structure Data df and interested Series
 # ------------------------------------------------------------------------------------------------------
 #setting lookback period
-@callback(
-    Output('lookback_prd', 'value'),
-    Input('lookback_prd', 'search_value'),
-    State('lookback_prd', 'value'),
+@app.callback(
+    Output('lookback_dropdown', 'value'),
+    Output('lookback_custom', 'value'),
+    Output('lookback_prd', 'data'),
+    Input('lookback_dropdown', 'value'),
+    Input('lookback_custom', 'value'),
     prevent_initial_call=False
 )
-def set_custom_lookback(search_value, current_value):
-    """
-    Allows both selecting from dropdown and typing custom lookback days.
-    If user types numeric input, use it directly.
-    """
-    if search_value:
-        sv = search_value.strip() # ✅ numeric check
-        if sv.isdigit():
-            val = int(sv)
-            if val >= 63:
-                return val
+def sync_dropdown_and_input(drop_val, custom_val):
+    # Detect which triggered the change
+    trigger = ctx.triggered_id
+
+    # If user typed a custom value
+    if trigger == 'lookback_custom' and custom_val:
+        try:
+            val = int(custom_val)
+            if(val >= 5):
+                return None, custom_val,  val
             else:
-                return MIN_DEFAULT_LOOKBACK
-        else:
-            # non-numeric input → reset to default
-            return DEFAULT_LOOKBACK
-    # no search_value (user picked from list or cleared)
-    return current_value or DEFAULT_LOOKBACK
+                return drop_val, '', drop_val
+        except ValueError:
+            return drop_val, '', drop_val
+
+    # If user selected from dropdown
+    elif trigger == 'lookback_dropdown':
+        return drop_val, '', drop_val
+
+    raise dash.exceptions.PreventUpdate
 
 
 @callback(
@@ -178,7 +183,7 @@ def set_custom_lookback(search_value, current_value):
     [Input('filename', 'value'),
     Input('str_name', 'value'),
     Input('str_number', 'value'),
-    Input('lookback_prd', 'value'),
+    Input('lookback_prd', 'data'),
     Input('load-btn', 'n_clicks')],
     prevent_initial_call= False)
 def general_info(filename, str_name, str_num, lookback_prd, n_clicks):
@@ -212,7 +217,7 @@ def update_comdty_input(general_data: list, n_clicks) -> str:
     [Output('raw-data-store', 'data'),
     Output('dt_latest', 'value')],
     [Input('filename', 'value'),
-     Input('lookback_prd', 'value'),
+     Input('lookback_prd', 'data'),
      Input('load-btn', 'n_clicks')],
      prevent_initial_call=False,
 )
@@ -255,7 +260,7 @@ def extract_raw_data(filename: str, lookback_prd: Union[str, int], n_clicks) -> 
     State('general-store', 'data'),
     Input('str_name', 'value'),
     Input('str_number', 'value'),
-    Input('lookback_prd', 'value')],
+    Input('lookback_prd', 'data')],
     prevent_initial_call=False
 )
 def compute_main_series_only(raw_data_dict: Dict[str, Any], general_store, str_name, str_number, lookback_prd):

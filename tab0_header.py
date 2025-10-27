@@ -66,18 +66,44 @@ def create_header_component(filename_options, default_filename, default_comdty, 
             html.Label("Structure Number", style={"color": "#c0c4cc", "fontWeight": "500",  "fontSize": "14px",   "marginBottom": "4px" }),
             dcc.Input(id='str_number', type='number', value=8, min=1, className='form-control')
         ]),
-        dbc.Col([html.Label("Lookback Period",style={"color": "#c0c4cc","fontWeight": "500","fontSize": "14px","marginBottom": "4px"}),
-            dcc.Dropdown(
-                id='lookback_prd',
-                options= lookback_options,
-                value=DEFAULT_LOOKBACK,
-                searchable=True,      # allows user to type custom
-                clearable=False,       # optional
-                placeholder="Select or type days...",
-                className='form-control',   # ✅ match existing header styling
-                maxHeight=310,
-            )
+        #drop down for lookback period with custom input box
+        dbc.Col([
+            html.Label("Lookback Period", style={"color": "#c0c4cc","fontWeight": "500","fontSize": "14px","marginBottom": "4px"}),
+            # --- Side-by-side layout ---
+            dbc.Row([
+                dbc.Col(
+                    dcc.Dropdown(
+                        id='lookback_dropdown',
+                        options=lookback_options,
+                        value=DEFAULT_LOOKBACK,
+                        clearable=False,
+                        placeholder="Select...",
+                        searchable=True,
+                        className='form-control'
+                    ),
+                    width=7,
+                    style={"paddingRight": "1px"}
+                ),
+                dbc.Col(
+                    dcc.Input(
+                        id='lookback_custom',
+                        type='text',
+                        placeholder="Custom...",
+                        debounce=True,
+                        style={
+                            'width': '100%',
+                            'height': '38px',
+                            'borderRadius': '6px',
+                            'border': '1px solid #ccc',
+                            'paddingLeft': '1px'
+                        }
+                    ),
+                    width=5,
+                    style={"paddingLeft": "5px"}
+                )
+            ]),
         ]),
+
         dbc.Col([
             html.Label(" "),
             dbc.Button("Load", id='load-btn', color='primary', className='mt-4', n_clicks=0)
