@@ -465,17 +465,11 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     date1 = snap_to_index(safe_parse_date(date1))
     date2 = snap_to_index(safe_parse_date(date2))
     # ---------- Plotting flags ----------
-    #curve_at_datex(out_ser,comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-    if plot_flags.get("Settle") and Settle is not None:
-        try:
-            Settle= int(Settle)
-            Settle = max(-len(str_df), min(Settle, len(str_df) - 1))
-            Settle = max(-win_local, min(Settle, win_local - 1))
-            out_ser = raw_df.iloc[Settle] if raw_df.shape[0] > Settle else None
-            settle_row = curve_at_datex(out_ser, comdty, str_name, curve_len,DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color": "gold"},show_values=0)
-        except Exception as e:
-            logging.warning(f"Skipping Settle: {e}")
+    if plot_flags.get("BB") and bb_std is not None:
+        fig = safe_study(f"bb({win_local}|{bb_std})", bollinger_bands, str_df, win_local, bb_std)
+
+    if plot_flags.get("XN"):
+        fig = safe_study(f"xn({win_local})", maxmin_band, str_df, win_local)
 
     if plot_flags.get("Date1") and date1 is not None:
         leg = date1.strftime("%Y-%m-%d")
@@ -497,11 +491,19 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     if plot_flags.get("quant_ser") and quantile is not None:
         fig = safe_study(f"quantile({round(quantile)}%|{win_local})",rolling_quantile_series, str_df, win_local, quantile)
 
-    if plot_flags.get("BB") and bb_std is not None:
-        fig = safe_study(f"bb({win_local}|{bb_std})", bollinger_bands, str_df, win_local, bb_std)
 
-    if plot_flags.get("XN"):
-        fig = safe_study(f"xn({win_local})", maxmin_band, str_df, win_local)
+
+        #curve_at_datex(out_ser,comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
+    if plot_flags.get("Settle") and Settle is not None:
+        try:
+            Settle= int(Settle)
+            Settle = max(-len(str_df), min(Settle, len(str_df) - 1))
+            Settle = max(-win_local, min(Settle, win_local - 1))
+            out_ser = raw_df.iloc[Settle] if raw_df.shape[0] > Settle else None
+            settle_row = curve_at_datex(out_ser, comdty, str_name, curve_len,DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
+            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color": "gold"},show_values=0)
+        except Exception as e:
+            logging.warning(f"Skipping Settle: {e}")
 
     # ---------- Latest ----------
     if plot_flags.get("Latest"):

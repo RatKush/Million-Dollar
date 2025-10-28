@@ -195,10 +195,10 @@ def load_data(lookback_prd: int, filepath: str = "SR3_ED_GEN.xlsm") -> pd.DataFr
         
         # Strategy 1: Try reading with row limit (faster)
         try:
-            df = pd.read_excel(filepath, sheet_name=0, engine='openpyxl', nrows=100)
+            df = pd.read_excel(filepath, sheet_name=0, engine='openpyxl', nrows=50)
             print("DONE Read with row limit strategy")
         except Exception as e1:
-            print(f"⚠️ Row limit strategy failed: {e1}")
+            print(f"⚠️ Row limit strategy failed: {e1} - trying unlimited rows")
             
             # Strategy 2: Try reading without row limit
             try:
@@ -206,6 +206,7 @@ def load_data(lookback_prd: int, filepath: str = "SR3_ED_GEN.xlsm") -> pd.DataFr
                 print("DONE Read with unlimited rows strategy")
             except Exception as e2:
                 print(f"ERROR  All Excel strategies failed: {e1}, {e2}")
+                print(f"ERROR  in loading data from excel file: {filepath} : check file format and Close any open instances of it.")
                 return pd.DataFrame()
         
         # Early validation
