@@ -113,6 +113,7 @@ def create_tab1_view():
                                 defaultColDef={"sortable": True, "resizable": True, "filter": True},
                                 columnSize="autoSize", # "sizeToFit", "autoSize", "responsiveSizeToFit", 
                                 dashGridOptions={"pagination": False, "domLayout": "autoHeight" },  # 👈 makes grid height fit content
+                                
                                 enableEnterpriseModules=True,#sparline
                                 style={"width": "100%"},  # or use a maxHeight with scroll
                                 
@@ -133,7 +134,7 @@ def init_plot(title):
     fig = go.Figure()
     fig.update_layout(
 
-        title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=14,  color= "#1f2128")),
+        title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=14,  color= "#ffffff")),
         #template="plotly_dark", #"plotly" Default white background
         hovermode="x unified",
         legend=dict(
@@ -305,7 +306,7 @@ def add_series(fig, data, name, color=None, mode="lines+markers", dash=None, opa
         mode += "+text" # Add "text" to the mode to display values
         kwargs['text'] = [f'{val:.1f}' for val in data.values]
         kwargs['textposition'] = "top center"
-        text_colors = ['red' if val < 0 else 'black' for val in data.values]
+        text_colors = ['red' if val < 0 else 'white' for val in data.values]
         #kwargs['textposition'] = ["top center" if val >= 0 else "bottom center" for val in data.values]
         kwargs['textfont'] = dict(color=text_colors)
     
@@ -340,14 +341,14 @@ def add_arrows(fig, data, name=None):
     for i in range(len(data)):
         if i == 0 or i == len(data) - 1:
             symbol = "circle"
-            color = "gray"
+            color = "lightgray"
             hover_text = "edge"
 
         current_val = data.iloc[i]
         
         # Default to neutral for edge cases
         symbol = "circle"
-        color = "grey"
+        color = "lightgrey"
         
         # Check for non-edge points
         if i > 0 and i < len(data) - 1:
@@ -382,7 +383,7 @@ def add_arrows(fig, data, name=None):
                     hover_text = "Good for Long"
                 else: # Equal distance
                     symbol = "circle"
-                    color = "gray"
+                    color = "lightgray"
                     hover_text = "Neutral"
 
         # --- NEW: Adjust Y-Value based on the symbol we just found ---
@@ -474,12 +475,12 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     if plot_flags.get("Date1") and date1 is not None:
         leg = date1.strftime("%Y-%m-%d")
         date_curve= curve_at_datex(raw_df.loc[date1], comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "darkgreen"},show_values=0)
+        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "#00FA9A"},show_values=0)
 
     if plot_flags.get("Date2") and date2 is not None:
         leg = date2.strftime("%Y-%m-%d")
         date_curve= curve_at_datex(raw_df.loc[date2], comdty, str_name, curve_len, DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "#3a3a3a"},show_values=0)
+        fig = add_plot_study(fig, leg,{"type": "line", "data": date_curve, "color": "#A9A9A9"},show_values=0)
 
     # ---------- Studies ----------
     if plot_flags.get("MA"):
@@ -501,7 +502,7 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
             Settle = max(-win_local, min(Settle, win_local - 1))
             out_ser = raw_df.iloc[Settle] if raw_df.shape[0] > Settle else None
             settle_row = curve_at_datex(out_ser, comdty, str_name, curve_len,DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color": "gold"},show_values=0)
+            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color": "#1E90FF"},show_values=0)
         except Exception as e:
             logging.warning(f"Skipping Settle: {e}")
 
@@ -509,7 +510,7 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     if plot_flags.get("Latest"):
         try:
             latest_row = str_df.iloc[0]
-            fig = add_plot_study(fig, "Latest",{"type": "line", "data": latest_row, "color": "blue"},show_values=1)
+            fig = add_plot_study(fig, "Latest",{"type": "line", "data": latest_row, "color": "#DAA520"},show_values=1)
             fig=  add_arrows(fig, latest_row)
         except Exception as e:
             logging.warning(f"Skipping Latest: {e}")

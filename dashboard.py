@@ -20,7 +20,7 @@ from str_cal import  process_raw_data, index, get_ratio, fetch_rates_cycle,fn_ma
 from tab0_header import create_header_component, get_free_port, extract_comdty, get_excel_files
 from tab1_curve import  create_tab1_view,  generate_curve_plot, table_populating_1_2
 from tab2_curve import (
-    tab_2_2_2_3_button_ids, create_tab2_view,get_button_class, compute_correlation_parameters,plot_single_structure,cal_sum_of_eases_hikes, cal_sum_of_same_sign_meets,
+    tab_2_2_2_3_button_ids,default_2_3_fitting_button_ids, create_tab2_view,get_button_class, compute_correlation_parameters,plot_single_structure,cal_sum_of_eases_hikes, cal_sum_of_same_sign_meets,
     Out_tab2_2, S12_tab2_2, L6_tab2_2, add_chart_2_2, plot_chart_2_2, add_chart_2_3, plot_chart_2_3
 )
 from tab3456_kde_help import plot_main_kde, classify_cycle, plotted_sub_KDE, create_kde_tab, kde_control_wrapper
@@ -52,6 +52,15 @@ APP_CONFIG = {
     'cache_type': 'simple'  # Use 'filesystem' or 'redis' for production
 }
 
+import plotly.io as pio
+# Set dark theme globally
+pio.templates.default = "plotly_dark"
+# Optional: make Plotly background transparent to blend with CYBORG theme
+pio.templates["plotly_dark"]["layout"].update({
+    "paper_bgcolor": "rgba(0,0,0,0)",
+    "plot_bgcolor": "rgba(0,0,0,0)",
+    "font": {"color": "white"}
+})
 # -------------------------------------------------------------------------------------------------------------------------------------------
 # DASH APP INITIALIZATION
 # ----------------------------------------------------------------------------------------------------------------------------------------------
@@ -231,7 +240,8 @@ def extract_raw_data(filename: str, lookback_prd: Union[str, int], n_clicks) -> 
         lookback_prd_int = int(lookback_prd)
         if lookback_prd_int <= 0:
             return {}, None
-        
+        # df = pd.read_excel(filename, sheet_name=0, engine='openpyxl', nrows=50)
+        # print(df.head())
         # Load and process data - FIXED: now returns tuple
         raw_df = process_raw_data(filepath=filename, lookback_prd=lookback_prd_int)
         if raw_df.empty:
@@ -241,6 +251,8 @@ def extract_raw_data(filename: str, lookback_prd: Union[str, int], n_clicks) -> 
         try:
             ts = pd.to_datetime(raw_df.index[0], errors='coerce')
             latest_date = ts.strftime("%d-%m-%y") if pd.notnull(ts) else None
+            #print(latest_date, raw_df.index[0])
+
         except Exception as e:
             logging.warning(f"Could not parse latest date: {e}")
             latest_date = None
@@ -345,6 +357,7 @@ def store_str_df_dcc_(raw_data_dict, win_local,str_name,  general_store):
 
         # Cache key = index hash + first row + other params
         cache_key = f"str_df:{hash(tuple(raw_df.index))}:{first_row_key}:{general_store[0]}:{win_local}:{str_name}"
+        #print(cache_key)
         str_df = cache.get(cache_key)
         
         if str_df is None:
@@ -522,9 +535,10 @@ def update_chart_tab(stored: Dict[str, Any], general) -> Any:
 
     try:
         series = pd.Series(
-        data=stored["values"],
-        index=pd.to_datetime(stored["index"], errors="coerce")
+            data=stored["values"],
+            index=pd.to_datetime(stored["index"], errors="coerce")
         )
+        #print(series.head())
         str_name = f"{general[0]}{general[1]}({general[2]})"
         return plot_single_structure(series, str_name)
 
@@ -556,6 +570,28 @@ def toggle_buttons(*args):
         store[twin_id] = not current
     return store
 
+@app.callback(
+    Output("default_2_3_fitting-store", "data"),
+    [Input(btn_id, "n_clicks") for btn_id in default_2_3_fitting_button_ids],
+    State("default_2_3_fitting-store", "data"),
+    prevent_initial_call=True
+)
+def toggle_single_button_state(*args):
+    """
+    Toggles the state (True/False) of the single button that was clicked 
+    and returns the updated store dictionary.
+    """
+    store = args[-1] or {}
+    # 2. Use dash.ctx to determine which component triggered the callback
+    triggered_id = ctx.triggered_id
+    # 3. Ensure a button was actually clicked (not a false trigger)
+    if triggered_id:
+        # Read the current state of the clicked button (defaults to False if not in store)
+        current_state = store.get(triggered_id, False)
+        # **4. Update State:** Toggle the state of the triggered button
+        store[triggered_id] = not current_state
+    return store
+
 
 @app.callback(
     [Output(btn_id, "className") for btn_id in tab_2_2_2_3_button_ids],
@@ -564,6 +600,13 @@ def toggle_buttons(*args):
 def update_classnames(store):
     return [get_button_class(store.get(btn_id, False)) for btn_id in tab_2_2_2_3_button_ids]
 
+@app.callback(
+    [Output(btn_id, "className") for btn_id in default_2_3_fitting_button_ids],
+    Input("default_2_3_fitting-store", "data")
+)
+def update_classnames(store):
+    return [get_button_class(store.get(btn_id, False)) for btn_id in default_2_3_fitting_button_ids]
+
 
 @app.callback(
     [Output('sum-of-eases-plot', 'figure', allow_duplicate=True),
@@ -571,10 +614,11 @@ def update_classnames(store):
     [Input('raw-data-store', 'data'),
     State('general-store', 'data'),
     Input('final-mainseriesonly-store', 'data'),## tab2_1 series for corr
-    Input('tab_2_2_2_3_toggle-store', 'data')],
+    Input('tab_2_2_2_3_toggle-store', 'data'),
+    Input("default_2_3_fitting-store", "data")],
     prevent_initial_call=True
 )
-def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Dict[str, Any], toggle_store: dict):
+def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Dict[str, Any], toggle_store: dict, fitting_store:dict):
     # Basic validation
     if not raw_data_dict or not raw_data_dict.get('data'):
         return warning_plot("no raw data dict found update_tab_2_2 "), warning_plot("no raw data dict found update_tab_2_3 ")
@@ -658,7 +702,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         else:
             series_data = pd.Series(dtype='float64')
         
-        add_chart_2_3(fig2_3, chart2_1_series, series_data, legend="sum of eases/ hikes", color="#4363d8")
+        add_chart_2_3(fig2_3, chart2_1_series, series_data,fitting_store, legend="sum of eases/ hikes", color="#4363d8")
         corr = compute_correlation_parameters(chart2_1_series, series_data)
         add_chart_2_2(fig2_2, series_data, corr, legend="sum of eases/ hikes", color="#4363d8")
 
@@ -678,7 +722,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         for btn, params in treasury_map.items():
             if toggle_store.get(btn):
                 series_data = df_rates.loc[params["label"]]
-                add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=params["legend"], color=params["color"])
+                add_chart_2_3(fig2_3, chart2_1_series, series_data,fitting_store, legend=params["legend"], color=params["color"])
                 if btn == "btn-effr":
                     # Special correlation case for EFFR
                     corr = {'pearson':None, 'mean_rolling_correlation': None, 'distance_correlation': None}
@@ -690,7 +734,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
     for btn, config in trace_config.items():
         if toggle_store.get(btn):
             series_data = config["func"](*config["args"])
-            add_chart_2_3(fig2_3, chart2_1_series, series_data, legend=config["legend"], color=config["color"])
+            add_chart_2_3(fig2_3, chart2_1_series, series_data, fitting_store,legend=config["legend"], color=config["color"])
             corr = compute_correlation_parameters(chart2_1_series, series_data )
             add_chart_2_2(fig2_2, series_data, corr, legend=config["legend"], color=config["color"])
 
@@ -752,7 +796,7 @@ def update_kde_plot_tab3(stored,general_store, kde_flags, val_line, pc_line):
     data=stored["values"],
     index=pd.to_datetime(stored["index"], errors="coerce")
     )
-        
+    #print(series.head()) 
     # Convert selected flags into a dict of bools
     plot_flags = {flag: (flag in kde_flags) for flag in [
         "Latest", "bb1", "bb2", 
@@ -1400,6 +1444,6 @@ def warning_plot(warning):
 # MAIN
 # ------------------------------------------------
 if __name__ == '__main__':
-    app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
-    #app.run(debug= True) #self
+    #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
+    app.run(debug= True) #self
     #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 

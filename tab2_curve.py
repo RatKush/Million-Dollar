@@ -37,6 +37,13 @@ default_2_2_2_3 = {
 
 tab_2_2_2_3_button_ids = list(default_2_2_2_3.keys())
 
+default_2_3_fitting = {
+    "btn-linear_fit": True,
+    "btn-median":  True, # e.g. default ON
+    "btn-degree2_fit": False ,
+    "btn-degree3_fit": False,
+}
+default_2_3_fitting_button_ids = list(default_2_3_fitting.keys())
 
 def get_button_class(is_active: bool) -> str:
     base = "tab-button me-2"
@@ -88,7 +95,8 @@ def create_tab2_view():
                 # --- ROW 2: Secondary Chart (Corrected) ---
                 # <<< CHANGE: The structure is now identical to Row 1
                 # Structure: dbc.Col -> [Buttons_Div, dcc.Loading]
-                dcc.Store(id="tab_2_2_2_3_toggle-store", data=default_2_2_2_3),    
+                dcc.Store(id="tab_2_2_2_3_toggle-store", data=default_2_2_2_3),
+                dcc.Store(id="default_2_3_fitting-store", data=default_2_3_fitting),    
                 dbc.Row([
                     dbc.Col(
                         # The children are now a list containing the buttons and the graph
@@ -180,7 +188,23 @@ def create_tab2_view():
                                     style={'height': '100%'}
                                 ),
                                 style={'flex-grow': 1}
-                            )
+                            ),
+
+
+                        # fitting models along with median lines
+                            html.Div([
+                                build_button("Linear fitting", id="btn-linear_fit", active=default_2_3_fitting["btn-linear_fit"]),
+                                build_button("Median lines", id="btn-median", active=default_2_3_fitting["btn-median"]),
+                                build_button("2nd Degree fitting", id="btn-degree2_fit", active=default_2_3_fitting["btn-degree2_fit"]),
+                                build_button("3rd Degree fitting", id="btn-degree3_fit", active=default_2_3_fitting["btn-degree3_fit"]),
+                            ],
+                            style={
+                                'display': 'flex',
+                                'gap': '0.5rem',
+                                'justifyContent': 'center',
+                                'flexWrap': 'wrap',
+                                'marginTop': '1rem'
+                            })
                         ],
                         # Styles are applied directly to the dbc.Col
                         className="border p-2 my-2 rounded",
@@ -226,12 +250,12 @@ def plot_single_structure(series, str_name):
         #print("plot single",series.index)
         series.index = pd.to_datetime(series.index, unit='D', origin='1899-12-30', errors='coerce')
 
-    
-
     fig = go.Figure()
+    #print(series)
+    
     series = pd.to_numeric(series, errors='coerce')
     series= rolling_bounds_filter(series, window=21, k=2)
-    #print(series.max)
+    #print(series)
     #series= remove_outliers(series, 0.01, 0.99)
     #print(series)
     #print(series.loc["2024-01-17"])
@@ -663,7 +687,128 @@ def plot_chart_2_3():
     return fig
 
 
-def add_chart_2_3(fig, series_Y, series_base, legend, color= "#f58231", axis= "1st"): #purple
+
+
+
+ # --- Add Optional Mean Lines for Context ---
+def add_median_lines(fig, df):
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return fig
+    med_x = df['x'].median()
+    med_y = df['y'].median()
+    # Vertical mean line
+    try:
+        if np.isnan(med_x) or np.isnan(med_y):
+            return fig
+        fig.add_shape(type="line", x0=med_x, x1=med_x, y0=df['y'].min(), y1=df['y'].max(),
+                        line=dict(color="grey", width=1.5, dash="dash"), layer="below", name="median",showlegend=True)
+        # Horizontal mean line
+        fig.add_shape(type="line", x0=df['x'].min(), x1=df['x'].max(), y0=med_y, y1=med_y,
+                        line=dict(color="grey", width=1.5, dash="dash"), layer="below")
+    except Exception as e:
+        print(f"Error calculating medians in fn add_median_lines: {e}. Returning original figure.")
+        return fig
+    return fig
+
+ # --- Linear Regression Fit ---
+def linear_regression_fit(fig, df, color="#000000"):
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return fig
+    try: 
+        x, y = df['x'], df['y']
+        b, a = np.polyfit(x, y, 1)  # slope, intercept
+        y_pred = a + b * x
+
+        # R-squared
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        r2 = 1 - ss_res / ss_tot
+
+        # Fit line
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit = a + b * x_fit
+        fig.add_trace(go.Scatter(
+            x=x_fit,
+            y=y_fit,
+            mode='lines',
+            name=f"Linear fitting | β={b:.2f}, R²={r2:.2f}",
+            line=dict(color=color, width=2),
+            opacity=0.6,
+            hoverinfo="skip"
+        ))
+
+        # # Annotation of regression stats
+        # fig.add_annotation(
+        #     xref='paper', yref='paper',
+        #     x=0.98, y=0.02,
+        #     text=f"β={b:.2f}, R²={r2:.2f}",
+        #     showarrow=False,
+        #     font=dict(size=11, color=color),
+        #     align='right',
+        #     bgcolor='rgba(255,255,255,0.6)'
+        # )
+    except Exception as e:
+        print(f"Error in linear regression fit: {e}. Returning original figure.")
+    return fig
+
+    # --- Polynomial Regression Fit (2nd or 3rd Order) ---
+def polynomial_fit(fig, df, degree=2, color="#a700c8"):
+    """
+    Add polynomial regression fit (2nd or 3rd order) to scatter plot.
+    """
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return fig
+    try:
+        if degree not in [2, 3]:
+            print("Degree must be 2 or 3 for polynomial fit.")
+            return fig   
+        x, y = df['x'].values, df['y'].values
+        # Fit polynomial of given degree
+        coeffs = np.polyfit(x, y, degree)
+        poly_eq = np.poly1d(coeffs)
+        
+        # Smooth curve for plotting
+        x_fit = np.linspace(x.min(), x.max(), 200)
+        y_fit = poly_eq(x_fit)
+
+        # Compute R² manually
+        y_pred = poly_eq(x)
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        r2 = 1 - ss_res / ss_tot
+
+        # Add curve trace
+        fig.add_trace(go.Scatter(
+            x=x_fit,
+            y=y_fit,
+            mode='lines',
+            name=f"Polynomial fit (deg= {degree}) | R²={r2:.2f}",
+            line=dict(color=color, width=2),
+            opacity=0.5,
+            hoverinfo="skip"
+        ))
+
+        # # Annotate coefficients + R²
+        # coeff_text = " + ".join([
+        #     f"{c:+.2e}·x^{degree - i}" for i, c in enumerate(coeffs)
+        # ])
+        # #annotation_text = f"{coeff_text}<br>R²={r2:.2f}"
+        # annotation_text = f"R²= {r2:.2f}"
+        # fig.add_annotation(
+        #     xref='paper', yref='paper',
+        #     x=0.98, y=0.10,
+        #     text=annotation_text,
+        #     showarrow=False,
+        #     font=dict(size=11, color=color),
+        #     align='right',
+        #     bgcolor='rgba(255,255,255,0.6)'
+        # )
+        return fig
+    except Exception as e:
+        print(f"Error in polynomial regression fit in polynomial_fit fn: {e}. Returning original figure.")
+    return fig
+
+def add_chart_2_3(fig, series_Y, series_base, fitting_store, legend, color= "#f58231", axis= "1st"): #purple
     if series_Y is None:
         return
     if series_Y.empty or series_Y.dropna().empty or series_base.empty or series_base.dropna().empty: 
@@ -696,18 +841,17 @@ def add_chart_2_3(fig, series_Y, series_base, legend, color= "#f58231", axis= "1
         customdata=df.index
     ))
      
-    # --- Add Optional Mean Lines for Context ---
-    mean_x = df['x'].mean()
-    mean_y = df['y'].mean()
+    if( fitting_store.get("btn-median", False) ):
+        add_median_lines(fig, df)
+    if( fitting_store.get("btn-linear_fit", False) ):
+        linear_regression_fit(fig, df)
+    if( fitting_store.get("btn-degree2_fit", False) ):
+        polynomial_fit(fig, df, degree=2)
+    if( fitting_store.get("btn-degree3_fit", False) ):
+        polynomial_fit(fig, df, degree=3)
     
-    # Vertical mean line
-    fig.add_shape(type="line", x0=mean_x, x1=mean_x, y0=df['y'].min(), y1=df['y'].max(),
-                    line=dict(color="grey", width=1.5, dash="dash"))
-    # Horizontal mean line
-    fig.add_shape(type="line", x0=df['x'].min(), x1=df['x'].max(), y0=mean_y, y1=mean_y,
-                    line=dict(color="grey", width=1.5, dash="dash"))
-        
 
+    # Highlight the latest point
     latest_x = series_base.iloc[0]
     latest_y = series_Y.iloc[0]
     # Add a new trace specifically for the single point
@@ -726,17 +870,6 @@ def add_chart_2_3(fig, series_Y, series_base, legend, color= "#f58231", axis= "1
         hovertemplate="<b>Latest</b><br>X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>"
     ))
 
-
-
-
-    fig.update_layout(
-        legend=dict(
-            orientation="h",          # horizontal legend
-            yanchor="bottom",
-            y=0.96,                   # position just above the top of the chart
-            xanchor="center",
-            x=0.5
-        )
-    )
-
     return fig
+
+

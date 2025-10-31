@@ -892,25 +892,25 @@ def generate_heatmap(rounding, layer_df, color_pref):
     fig.update_layout(
         plot_bgcolor='lightgray',
         xaxis=dict(side='top', showgrid=False, fixedrange=True,
-                   tickfont=dict(size=14, family="Orbitron", color="black")),
+                   tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         yaxis=dict(side='top', showgrid=False, fixedrange=True,
-                   tickfont=dict(size=14, family="Orbitron", color="black")),
+                   tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
 
     # Vertical and horizontal lines
-    x_lines = [0.5, 3.5, 13.5, 23.5, 27.5]
+    x_lines =  [4.5, 9.5, 14.5, 19.5, 24.5, 29.5, 34.5]
     y_lines = [-0.5,3.5, 7.5, 11.5, 15.5, 19.5, 23.5, 27.5]
     y_max = len(y_labels) - 1
 
     for x in x_lines:
         if x < len(x_labels) - 1:
-            fig.add_vline(x=x, line_width=2, line_dash="solid", line_color="white")
+            fig.add_vline(x=x, line_width=2, line_dash="solid", line_color="#444")
 
     for y in y_lines:
         if y < len(y_labels) - 1:
-            fig.add_hline(y=y_max - y, line_width=2, line_dash="solid", line_color="white")
+            fig.add_hline(y=y_max - y, line_width=2, line_dash="solid", line_color="#444")
 
     # Colored vertical segments
     vline_segments = [
@@ -972,19 +972,19 @@ def create_blank_heatmap(layer_df):
 
     fig.update_layout(
         plot_bgcolor='lightgray',
-        xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
-        yaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="black")),
+        xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
+        yaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         height=800,
         margin=dict(l=5, r=5, t=5, b=5),
     )
-    x_coordinate_for_line= {0.5, 3.5, 13.5, 23.5, 27.5}
+    x_coordinate_for_line= {4.5, 9.5, 14.5, 19.5, 24.5, 29.5, 34.5}
     for x_line in x_coordinate_for_line:
         if x_line < len(structure_order)-1:
             fig.add_vline(
                 x=x_line,
                 line_width=1,
                 line_dash="solid",
-                line_color="white",
+                line_color="#444",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
@@ -996,7 +996,7 @@ def create_blank_heatmap(layer_df):
                 y= len(contract_order)-y_line,
                 line_width=1,
                 line_dash="solid",
-                line_color="white",
+                line_color="#444",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
