@@ -387,7 +387,7 @@ def rolling_bounds_filter(df, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K):
         raise TypeError("Input must be a pandas Series or DataFrame")
 
 ####3 IQR
-def process_series_iqr(series, window=DEFAULT_WINDOW, k=1.5,  min_periods  = 5): #####less ier k
+def process_series_iqr(series, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K,  min_periods  = 5): #####less ier k
     """
     Processes a single pandas Series to filter outliers using the rolling IQR method.
     
@@ -476,7 +476,8 @@ index = [
     "OUT", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
     "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
     "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X L6- 2X L6(n+1)", "2X L6- 3X L6(n+1)", "1X L6- 2X L6(n+2)", "2X L6- 3X L6(n+2)",
-    "1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"
+    "1X L3- 2X L3(n+1)", "2X L3- 3X L3(n+1)", "1X L3- 2X L3(n+2)", "2X L3- 3X L3(n+2)",
+    "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)", "1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)"
 ]
 
 ratio= [
@@ -513,15 +514,21 @@ ratio= [
     [1, 0, -4, 0, 5, 0, -2],                    # 1X L6- 2X L6(n+2)  i=29
     [2, 0, -7, 0, 8, 0, -3],                    # 2X L6- 3X L6(n+2)  i=30
 
-    [1,-2],                                     # "1X On- 2X On+1"  i=31
-    [2, -1],                                    # "2X On- 1X On+1"  i=32
-    [2, -3],                                    # "2X On- 3X On+1"  i=33
-    [3, -2],                                    # "3X On- 2X On+1"  i=34
+    [1, -4, 5, -2],                             # 1X L3- 2X L3(n+1)  i=31
+    [2, -7, 8, -3],                             # 2X L3- 3X L3(n+1)  i=32
+    [1, -2, -1, 4, -2],                         # 1X L3- 2X L3(n+2)  i=33
+    [2, -4, -1, 6, -3],                         # 2X L3- 3X L3(n+2)  i=34
 
     [1,-3,2],                                   # "1X S1n- 2X S1n+1"  i=35
     [2,-3,1],                                   # "2X S1n- 1X S1n+1"  i=36
     [2,-5,3],                                   # "2X S1n- 3X S1n+1"  i=37
-    [3,-5,2],                                   # "3X S1n- 2X S1n+1"  i=38                 
+    [3,-5,2],                                   # "3X S1n- 2X S1n+1"  i=38
+
+    [1,-2],                                     # "1X On- 2X On+1"  i=39
+    [2, -1],                                    # "2X On- 1X On+1"  i=40
+    [2, -3],                                    # "2X On- 3X On+1"  i=41
+    [3, -2],                                    # "3X On- 2X On+1"  i=42
+               
 ]
 
 ratio_table = pd.DataFrame(ratio, index=index)

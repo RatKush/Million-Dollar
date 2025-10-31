@@ -134,7 +134,7 @@ def initiate_plot(title):
     fig.update_layout(
         #xaxis_title='Value',
         #yaxis_title='Density',
-        title={"text": f"{title}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
+        title={"text": f"{title}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#e0e0e0"}},
         #title=dict(text=title, x=0.5, y=0.99, xanchor="center",  "font": {"size": 14, "color": "#1f2128"}),
         legend=dict(x=0.5, y=0.96, orientation="h", xanchor="center", yanchor="bottom"),
         height=530,
@@ -207,7 +207,7 @@ def plot_kde(fig, series):
             y=kde_vals,
             mode='lines',
             name='KDE',
-            line=dict(color='royalblue', width=3),
+            line=dict(color='#4FC3F7', width=3),
             showlegend=False,
             hovertemplate='val: %{x:.1f}'
         ))
@@ -216,7 +216,7 @@ def plot_kde(fig, series):
     return fig
 
 
-def add_vline(fig, x, color='black', dash='solid', width=2, text=None, position="top right", opacity=1.0, showlegend=True):
+def add_vline(fig, x, color="#e0e0e0", dash='solid', width=2, text=None, position="top right", opacity=1.0, showlegend=True):
     y_vals = [y for trace in fig.data if 'y' in trace for y in trace.y]
     y_min, y_max = (0, 1) if not y_vals else (np.nanmin(y_vals), np.nanmax(y_vals))
     fig.add_trace(go.Scatter(
@@ -242,7 +242,7 @@ def add_band_mask(fig, lower_pct, upper_pct, kde_trace_name, name):
         x=np.concatenate([x_vals[mask], x_vals[mask][::-1]]),
         y=np.concatenate([kde_vals[mask], np.zeros_like(kde_vals[mask])]),
         fill='toself',
-        fillcolor='rgba(137, 207, 240, 0.3)',
+        fillcolor='rgba(180,180,250,0.3)',
         line=dict(color='rgba(255,255,255,0)'),
         hoverinfo='skip',
         showlegend=True,
@@ -501,7 +501,7 @@ def warning_plot_copy(warning):
         #text="⚠ No 'Hike' cycle data available as per your criteria (no parent data)",
         text= warning,
         showarrow=False,
-        font=dict(color="red", size=16),
+        font=dict(color="#FF5252", size=16),
         x=0.5, y=0.5, xref="paper", yref="paper",
         xanchor="center", yanchor="middle"
     )
