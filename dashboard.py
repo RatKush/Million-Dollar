@@ -657,25 +657,25 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
             "func": Out_tab2_2,
             "args": (raw_df,comdty, str_num, lookback_prd, DEFAULT_WINDOW, DEFAULT_OUTLIER_K),
             "legend": "nth Out",
-            "color": "#f58231" # Orange
+            "color": "#ff9933" # Orange
         },
         "btn-mid_out": {
             "func": Out_tab2_2,
             "args": (raw_df, comdty, str_num + int(len(get_ratio(str_name)) / 2), lookback_prd, DEFAULT_WINDOW, DEFAULT_OUTLIER_K),
             "legend": "Mid Out",
-            "color": "#ffe119" # Bright Yellow
+            "color": "#d4b000" # Bright Yellow
         },
         "btn-1sts12": {
             "func": S12_tab2_2,
             "args": (raw_df, 1, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K),
             "legend": "1st S12",
-            "color": "#006666" # Cyan
+            "color": "#00b3b3" # Cyan
         },
         "btn-nths12": {
             "func": S12_tab2_2,
             "args": (raw_df, str_num, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K),
             "legend": "nth S12",
-            "color": "#3cb44b" # Strong Green
+            "color": "#57d65e" # Strong Green
         },
         "btn-12ths12": {
             "func": S12_tab2_2,
@@ -687,7 +687,7 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
             "func": L6_tab2_2,
             "args": (raw_df, str_num, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K ),
             "legend": "nth L6",
-            "color": "rgb(152,78,163)"
+            "color": "#9b6dd7"
         }
     }
 
@@ -702,9 +702,9 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         else:
             series_data = pd.Series(dtype='float64')
         
-        add_chart_2_3(fig2_3, chart2_1_series, series_data,fitting_store, legend="sum of eases/ hikes", color="#4363d8")
+        add_chart_2_3(fig2_3, chart2_1_series, series_data,fitting_store, legend="sum of eases/ hikes", color="#5c8aff")
         corr = compute_correlation_parameters(chart2_1_series, series_data)
-        add_chart_2_2(fig2_2, series_data, corr, legend="sum of eases/ hikes", color="#4363d8")
+        add_chart_2_2(fig2_2, series_data, corr, legend="sum of eases/ hikes", color="#5c8aff")
 
     # 2. Treasury rates (fetch data only once)
     treasury_buttons = {"btn-effr", "btn-2yr", "btn-5yr", "btn-10yr", "btn-2y10y"}
@@ -712,11 +712,11 @@ def update_tab_2_2(raw_data_dict: Dict[str, Any], general_store, main_series: Di
         df_rates = fetch_rates_cycle(lookback_prd, filepath="SR3_ED_GEN.xlsm", sheetname="treasuries rates")
         
         treasury_map = {
-            "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "black"},
-            "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#5c2791"},
-            "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#7a9900"},
-            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#b04141"},
-            "btn-2y10y": {"label": "2y10y", "legend": "2y10y", "color": "#8c564b"},
+            "btn-effr": {"label": "Rates", "legend": "EFFR", "color": "#c0c0c0"},
+            "btn-2yr": {"label": "2Yr", "legend": "2Yr", "color": "#a378ff"},
+            "btn-5yr": {"label": "5Yr", "legend": "5Yr", "color": "#b7cc45"},
+            "btn-10yr": {"label": "10Yr", "legend": "10Yr", "color": "#e57373"},
+            "btn-2y10y": {"label": "2y10y", "legend": "2y10y", "color": "#c48777"},
         }
 
         for btn, params in treasury_map.items():
@@ -1377,7 +1377,7 @@ def update_trade_notes(add_click, remove_clicks, new_note, stored_notes):
 )
 def display_trade_notes(notes):
     if not notes:
-        return html.Div("No trades added yet.", style={"color": "#888", "padding": "10px"})
+        return html.Div("No trades added yet.", style={"color": "#9aa0a6", "padding": "10px"})
 
     return [
         html.Div([
@@ -1445,6 +1445,6 @@ def warning_plot(warning):
 # ------------------------------------------------
 if __name__ == '__main__':
     #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
-    #app.run(debug= True) #self
-    app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
+    app.run(debug= True) #self
+    #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
 

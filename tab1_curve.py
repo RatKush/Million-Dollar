@@ -133,15 +133,34 @@ def init_plot(title):
     """
     fig = go.Figure()
     fig.update_layout(
-
         title=dict(text=title, x=0.5, y=0.99, xanchor="center", font=dict(size=14,  color= "#ffffff")),
-        #template="plotly_dark", #"plotly" Default white background
+        template="plotly_dark", #"plotly" Default white background
         hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor= "#F5F5F5",
+            font_size=14,
+            font_family="Arial",
+            font_color="black",
+            bordercolor="#F5F5F5",
+        ),
         legend=dict(
             x=0.5, y=0.95,
             orientation="h",
             xanchor="center",
             yanchor="bottom"
+        ),
+        xaxis=dict(
+            # Enable the spike line
+            showspikes=True,
+            # Draw the spike line across the entire plot area
+            spikemode="across", 
+            # Set a subtle gray color (much softer than white)
+            spikecolor="#9e9e9e", 
+            # Ensure it is a clean, single line
+            spikedash="solid", 
+            spikethickness=1,
+            # Snap the line to the nearest data point's X value
+            spikesnap="data" 
         ),
         height=470,
         margin=dict(l=10, r=10, t=30, b=20),
@@ -191,7 +210,9 @@ def add_band(fig, upper, lower, name, color="rgba(180,180,250,0.3)", zorder=1):
         line=dict(width=0),
         showlegend=False,
         hoverinfo='skip',
-        name=f"{name} Lower"
+        name=f"{name} Lower",
+        #layer='below',
+        zorder=0,
     ))
 
     fig.add_trace(go.Scatter(
@@ -201,6 +222,8 @@ def add_band(fig, upper, lower, name, color="rgba(180,180,250,0.3)", zorder=1):
         line=dict(width=0),
         fill='tonexty',
         fillcolor=color,
+        #layer='below',
+        zorder=0,
         name=name,
         customdata=lower.values,
         hovertemplate="(%{customdata:.2f}, %{y:.2f}) @%{fullData.name}<extra></extra>"
@@ -375,11 +398,11 @@ def add_arrows(fig, data, name=None):
                 
                 if dist_to_lower > dist_to_higher:
                     symbol = "arrow-down"
-                    color = "red"
+                    color = "#FF5C5C"
                     hover_text = "Good for Short"
                 elif dist_to_higher > dist_to_lower:
                     symbol = "arrow-up"
-                    color = "green"
+                    color = "#00D8A0"
                     hover_text = "Good for Long"
                 else: # Equal distance
                     symbol = "circle"
@@ -407,7 +430,7 @@ def add_arrows(fig, data, name=None):
         hoverinfo='text',
         hovertext=hover_texts,
         showlegend=False,
-        opacity=0.2,
+        opacity=0.3,
         marker=dict(
             symbol=arrow_symbols,
             color=arrow_colors,
@@ -502,7 +525,7 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
             Settle = max(-win_local, min(Settle, win_local - 1))
             out_ser = raw_df.iloc[Settle] if raw_df.shape[0] > Settle else None
             settle_row = curve_at_datex(out_ser, comdty, str_name, curve_len,DEFAULT_WINDOW, DEFAULT_OUTLIER_K)
-            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color": "#1E90FF"},show_values=0)
+            fig = add_plot_study(fig, name=f"Settle(-{Settle})",item={"type": "line", "data": settle_row, "color":"#CDA541" },show_values=0)
         except Exception as e:
             logging.warning(f"Skipping Settle: {e}")
 
@@ -510,7 +533,7 @@ def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: 
     if plot_flags.get("Latest"):
         try:
             latest_row = str_df.iloc[0]
-            fig = add_plot_study(fig, "Latest",{"type": "line", "data": latest_row, "color": "#DAA520"},show_values=1)
+            fig = add_plot_study(fig, "Latest",{"type": "line", "data": latest_row, "color": "#1E90FF"},show_values=1)
             fig=  add_arrows(fig, latest_row)
         except Exception as e:
             logging.warning(f"Skipping Latest: {e}")

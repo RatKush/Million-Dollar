@@ -93,7 +93,8 @@ def create_header_component(filename_options, default_filename, default_comdty, 
                             'width': '100%',
                             'height': '38px',
                             'borderRadius': '6px',
-                            'border': '1px solid #ccc',
+                            # darker subtle border for dark theme
+                            'border': '1px solid #3a3f4b',
                             'paddingLeft': '1px'
                         }
                     ),

@@ -193,8 +193,8 @@ def create_tab2_view():
 
                         # fitting models along with median lines
                             html.Div([
-                                build_button("Linear fitting", id="btn-linear_fit", active=default_2_3_fitting["btn-linear_fit"]),
                                 build_button("Median lines", id="btn-median", active=default_2_3_fitting["btn-median"]),
+                                build_button("Linear fitting", id="btn-linear_fit", active=default_2_3_fitting["btn-linear_fit"]),
                                 build_button("2nd Degree fitting", id="btn-degree2_fit", active=default_2_3_fitting["btn-degree2_fit"]),
                                 build_button("3rd Degree fitting", id="btn-degree3_fit", active=default_2_3_fitting["btn-degree3_fit"]),
                             ],
@@ -279,7 +279,7 @@ def plot_single_structure(series, str_name):
         name=str_name,
         mode='lines',
         line=dict(
-            color='blue',
+            color="#1E90FF",
             dash='solid'
         ),
         connectgaps=False,  # Ensures NaNs are not connected
@@ -320,7 +320,7 @@ def plot_single_structure(series, str_name):
         showarrow=False,
         xshift=10,
         yshift=20,
-        font=dict(size=10, color="grey")
+        font=dict(size=10, color="rgba(255,255,255,0.6)")
     )
 
 
@@ -328,22 +328,22 @@ def plot_single_structure(series, str_name):
     fig.update_xaxes(
         showspikes=True,
         spikemode='across',
-        spikecolor='grey',
-        spikethickness=1,
-        spikesnap='cursor',
+        spikecolor='rgba(255,255,255,0.35)',
+        spikethickness=0.2,
+        spikesnap='data',
         spikedash='solid'
     )
     fig.update_yaxes(
         showspikes=True,
         spikemode='across',
-        spikecolor='grey',
-        spikethickness=1,
-        spikesnap='cursor',
+        spikecolor='rgba(255,255,255,0.35)',
+        spikethickness=0.2,
+        spikesnap='data',
         spikedash='solid'
     )
     fig.update_layout(
         #title=dict(text=title, x=0.5, y=0.90, xanchor="center"), font=dict(size=14,  color= "#1f2128")
-        title={"text": f"{str_name}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#1f2128"}},
+        title={"text": f"{str_name}", "x": 0.5,"y":0.99, "xanchor": "center", "font": {"size": 14, "color": "#e0e0e0"}},
         #xaxis_title="Date",
         #yaxis_title="Structure Value",
         height=450,
@@ -426,7 +426,7 @@ def plot_chart_2_2():
     fig.update_xaxes(
         showspikes=True,
         spikemode='across',
-        spikecolor='grey',
+        spikecolor='rgba(255,255,255,0.35)',
         spikethickness=1,
         spikesnap='cursor',
         spikedash='solid'
@@ -434,7 +434,7 @@ def plot_chart_2_2():
     fig.update_yaxes(
         showspikes=True,
         spikemode='across',
-        spikecolor='grey',
+        spikecolor='rgba(255,255,255,0.35)',
         spikethickness=1,
         spikesnap='cursor',
         spikedash='solid'
@@ -521,7 +521,7 @@ def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #pur
         showarrow=False,
         xshift=5,
         yshift=25,
-        font=dict(size=10, color="grey")
+        font=dict(size=10, color="rgba(255,255,255,0.6)")
     )
     #print(corr["mean_rolling_correlation"], corr["distance_correlation"])
     if corr is not None:
@@ -533,7 +533,7 @@ def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #pur
                 showarrow=False,
                 xshift=5,
                 yshift= 15,
-                font=dict(size=10, color="grey")
+                font=dict(size=10, color="rgba(255,255,255,0.6)")
             )
 
     fig.update_layout(
@@ -648,11 +648,11 @@ def plot_chart_2_3():
     
     fig.update_xaxes(
         showgrid=True,
-        gridcolor="#ececec",
+        gridcolor="rgba(255,255,255,0.06)",
         #zeroline=False,
         #showspikes=True,
         spikemode='across',
-        spikecolor='grey',
+        spikecolor='rgba(255,255,255,0.35)',
         spikethickness=1,
         spikesnap='cursor',
         spikedash='solid'
@@ -660,10 +660,10 @@ def plot_chart_2_3():
     fig.update_yaxes(
         showgrid=True,
         showspikes=True,
-        gridcolor="#ececec",
+        gridcolor="rgba(255,255,255,0.06)",
         #showspikes=True,
         spikemode='across',
-        spikecolor='grey',
+        spikecolor='rgba(255,255,255,0.35)',
         spikethickness=1,
         spikesnap='cursor',
         spikedash='solid'
@@ -701,17 +701,17 @@ def add_median_lines(fig, df):
         if np.isnan(med_x) or np.isnan(med_y):
             return fig
         fig.add_shape(type="line", x0=med_x, x1=med_x, y0=df['y'].min(), y1=df['y'].max(),
-                        line=dict(color="grey", width=1.5, dash="dash"), layer="below", name="median",showlegend=True)
+                        line=dict(color="rgba(255,255,255,0.35)", width=1.5, dash="dash"), layer="below", name="median",showlegend=True)
         # Horizontal mean line
         fig.add_shape(type="line", x0=df['x'].min(), x1=df['x'].max(), y0=med_y, y1=med_y,
-                        line=dict(color="grey", width=1.5, dash="dash"), layer="below")
+                        line=dict(color="rgba(255,255,255,0.35)", width=1.5, dash="dash"), layer="below")
     except Exception as e:
         print(f"Error calculating medians in fn add_median_lines: {e}. Returning original figure.")
         return fig
     return fig
 
  # --- Linear Regression Fit ---
-def linear_regression_fit(fig, df, color="#000000"):
+def linear_regression_fit(fig, df, color="#e0e0e0"):
     if not isinstance(df, pd.DataFrame) or df.empty:
         return fig
     try: 
