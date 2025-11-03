@@ -29,7 +29,7 @@ Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience
 ✅ **Modular Python scripts for easier maintenance**  
 ✅ **Easy to run locally**
 
-<img width="439" height="195" alt="image" src="https://github.com/user-attachments/assets/4b4a8097-93cd-4892-871c-b3a3dac005b7" />
+<img width="603" height="219" alt="image" src="https://github.com/user-attachments/assets/64787e0d-3b87-42cc-9063-e915cd7abed5" />
 
 
 ## Setup Instructions
