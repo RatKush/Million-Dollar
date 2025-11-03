@@ -242,7 +242,7 @@ def add_band_mask(fig, lower_pct, upper_pct, kde_trace_name, name):
         x=np.concatenate([x_vals[mask], x_vals[mask][::-1]]),
         y=np.concatenate([kde_vals[mask], np.zeros_like(kde_vals[mask])]),
         fill='toself',
-        fillcolor='rgba(180,180,250,0.3)',
+        fillcolor='rgba(79,195,247,0.12)',
         line=dict(color='rgba(255,255,255,0)'),
         hoverinfo='skip',
         showlegend=True,
@@ -354,7 +354,7 @@ def plot_main_kde(plot_flags,Comdty, str_name,str_number, lookback_prd, series, 
             try:
                 percentile_val = get_percentile(series, pc_line)
                 pc_line = float(pc_line)
-                add_vline(fig, percentile_val, color="#07031D", dash='dash', text=f"Val ({percentile_val} | {pc_line}%)")
+                add_vline(fig, percentile_val, color="#e0e0e0", dash='dash', text=f"Val ({percentile_val} | {pc_line}%)")
             except (ValueError, TypeError):
                 # ignore bad inputs (non-numeric)
                 pass

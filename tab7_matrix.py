@@ -890,7 +890,7 @@ def generate_heatmap(rounding, layer_df, color_pref):
 
     # Layout
     fig.update_layout(
-        plot_bgcolor='lightgray',
+        plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(side='top', showgrid=False, fixedrange=True,
                    tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         yaxis=dict(side='top', showgrid=False, fixedrange=True,
@@ -906,15 +906,15 @@ def generate_heatmap(rounding, layer_df, color_pref):
 
     for x in x_lines:
         if x < len(x_labels) - 1:
-            fig.add_vline(x=x, line_width=2, line_dash="solid", line_color="#444")
+            fig.add_vline(x=x, line_width=2, line_dash="solid", line_color="rgba(255,255,255,0.6)")
 
     for y in y_lines:
         if y < len(y_labels) - 1:
-            fig.add_hline(y=y_max - y, line_width=2, line_dash="solid", line_color="#444")
+            fig.add_hline(y=y_max - y, line_width=2, line_dash="solid", line_color="rgba(255,255,255,0.6)")
 
     # Colored vertical segments
     vline_segments = [
-        (-0.5, 3.5, 'grey'), (3.5, 7.5, 'red'), (7.5, 11.5, 'green'),
+        (-0.5, 3.5, 'white'), (3.5, 7.5, 'red'), (7.5, 11.5, 'green'),
         (11.5, 15.5, 'blue'), (15.5, 19.5, 'gold'), (19.5, 23.5, 'purple'),
         (23.5, 27.5, 'orange'), (27.5, 31.5, 'pink')
     ]
@@ -942,6 +942,7 @@ def generate_heatmap(rounding, layer_df, color_pref):
     fig.update_traces(
         text=text,
         texttemplate="%{text}",
+        #textfont_color='#c0c4cc',
         hovertemplate="<b>%{x} | %{y}</b><br>Val: %{z:.1f} <extra></extra>"
     )
 
@@ -971,7 +972,7 @@ def create_blank_heatmap(layer_df):
     )
 
     fig.update_layout(
-        plot_bgcolor='lightgray',
+        plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         yaxis=dict(side='top', showgrid=False, tickfont=dict(size=14, family="Orbitron", color="#c0c4cc")),
         height=800,
@@ -984,7 +985,7 @@ def create_blank_heatmap(layer_df):
                 x=x_line,
                 line_width=1,
                 line_dash="solid",
-                line_color="#444",
+                line_color="rgba(255,255,255,0.12)",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
@@ -996,7 +997,7 @@ def create_blank_heatmap(layer_df):
                 y= len(contract_order)-y_line,
                 line_width=1,
                 line_dash="solid",
-                line_color="#444",
+                line_color="rgba(255,255,255,0.12)",
                 # annotation_text="Key Event", # Optional: add a label to the line
                 # annotation_position="top right"
             )
@@ -1232,7 +1233,7 @@ def generate_heatmap_detail_panel (clicked_series, x_val, y_val, prev_val, next_
         )
     )
     sparkline_fig.update_layout(
-        template='plotly_white',
+        template='plotly_dark',
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=4, b=4),
