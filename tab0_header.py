@@ -116,6 +116,9 @@ def create_header_component(filename_options, default_filename, default_comdty, 
 
 # Commodity matching configuration
 COMMODITY_GROUPS = {
+    "SR3-SO3": {"sr3 so3", "sr3 vs so3", "sr3-so3", "sr3 vs so3", "sr3 so3", "sr3 vs so3", "sr3-so3", "sr3 vs so3"},
+    "SR3-ER": {"sr3 er", "sr3 vs er", "sr3-er", "sr3 vs er", "sr3 er", "sr3 vs er", "sr3-er", "sr3 vs er"},
+    "ER-SO3":  {"er so3", "er vs so3", "er-so3", "er vs so3", "er so3", "er vs so3", "er-so3", "er vs so3"},
     "SR3": {"SR3_ED_GEN", "SR3_ED", "sr3", "sofr", "SR3", "eurodollar", "ed"},
     "SR1": {"sr1", "SR1_GEN"},
     "SO3": {"so3", "SO3_GEN", "sonia"},
