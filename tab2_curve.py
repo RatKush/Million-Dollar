@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import numpy as np
 
 from str_cal import  rolling_bounds_filter,process_help_calculation, get_rank
-
+from str_cal import DEFAULT_WINDOW, DEFAULT_OUTLIER_K
 ########################################### tab2_2 buttons #################################################
 default_2_2_2_3 = {
     "btn-ease_hike": True,   # e.g. default ON
@@ -243,7 +243,7 @@ def build_button(label, id, active=False):
 def plot_single_structure(series, str_name):
 
     if series.empty:
-        print("empty series")
+        print("Skipping plot 2_1 as series is empty series; returned by  plot_single_structure fn")
         return warning_plot_copy2(f"⚠ Series data not availbale (plot_single_structure_{str_name})")
     # Ensure index is datetime for x-axis formatting
     if not pd.api.types.is_datetime64_any_dtype(series.index):
@@ -254,7 +254,7 @@ def plot_single_structure(series, str_name):
     #print(series)
     
     series = pd.to_numeric(series, errors='coerce')
-    series= rolling_bounds_filter(series, window=21, k=2)
+    series= rolling_bounds_filter(series, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
     #print(series)
     #series= remove_outliers(series, 0.01, 0.99)
     #print(series)
@@ -453,7 +453,7 @@ def plot_chart_2_2():
 
 def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #purple
     if series.empty or series.dropna().empty: 
-        print("empty series")
+        print("Skipping plot 2_2 as series is empty series; returned by  add_chart_2_2 fn")
         return
     # Ensure index is datetime for x-axis formatting
 
@@ -462,7 +462,7 @@ def add_chart_2_2(fig, series,corr, legend, color= "#f58231", axis= "1st"): #pur
         series.index = pd.to_datetime(series.index, unit='D', origin='1899-12-30', errors='coerce')
 
     series = pd.to_numeric(series, errors='coerce')
-    series= rolling_bounds_filter(series, window=21, k=2.5)
+    series= rolling_bounds_filter(series, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
 
     # Add horizontal line at y = y0 parallel to x axis
     latest_x = series.index[0]
@@ -594,9 +594,9 @@ def L6_tab2_2(out_df, n, lookback_prd, DEFAULT_WINDOW,DEFAULT_OUTLIER_K ):
     return series
 
 
-def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolling_window: int = 21):
+def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolling_window: int = DEFAULT_WINDOW):
     """
-    The window size for the rolling correlation calculation is 21
+    The window size for the rolling correlation calculation is DEFAULT_WINDOW
     'mean_rolling_correlation': The average of the rolling Pearson correlation.
                             [-1,+1] [perfect inverse correlation, perfect positive correlation]
     'distance_correlation' : captures both linear and non-linear relationships.
@@ -609,7 +609,7 @@ def compute_correlation_parameters(series1: pd.Series, series2: pd.Series, rolli
         return {"pearson":None, "mean_rolling_correlation": None,"distance_correlation": None}
     #print(f"Input series must have the same length {len(series1)}, {len(series2)}")
     if len(series1) != len(series2):
-        print(f"Input series must have the same length {len(series1)}, {len(series2)}")
+        print(f"Skiping correlation in plot 2_1; Input series must have the same length {len(series1)}, {len(series2)}")
         return {"pearson":None, "mean_rolling_correlation": None,"distance_correlation": None}
 
     if len(series1) < rolling_window:
@@ -812,16 +812,16 @@ def add_chart_2_3(fig, series_Y, series_base, fitting_store, legend, color= "#f5
     if series_Y is None:
         return
     if series_Y.empty or series_Y.dropna().empty or series_base.empty or series_base.dropna().empty: 
-        print("empty series")
+        print("Skipping plot 2_3 as series is empty series; returned by  add_chart_2_3 fn")
         return
     if len(series_Y) != len(series_base):
-        print(f"Input series must have the same length {len(series_Y)}, {len(series_base)}")
+        print(f"Skiping plot 2_3; Input series must have the same length  {len(series_Y)}, {len(series_base)}")
         return
     
     series_Y = pd.to_numeric(series_Y, errors='coerce')
-    series_Y= rolling_bounds_filter(series_Y, window=21, k=2)
+    series_Y= rolling_bounds_filter(series_Y, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
     series_base = pd.to_numeric(series_base, errors='coerce')
-    series_base= rolling_bounds_filter(series_base, window=21, k=2)
+    series_base= rolling_bounds_filter(series_base, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
 
 
    

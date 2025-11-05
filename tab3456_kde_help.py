@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
-from str_cal import process_help_calculation, get_rank
+from str_cal import process_help_calculation, get_rank, DEFAULT_OUTLIER_K, DEFAULT_WINDOW
 
 
 # ##############################shared control panel for all 4 kde plot cntrol tab3---- tab6################################
@@ -147,7 +147,7 @@ def initiate_plot(title):
 
 
 
-def small_window_stats(series, small_window=21, std_multi=1):
+def small_window_stats(series, small_window=DEFAULT_OUTLIER_K, std_multi=1):
     """
     Compute short-window rolling stats (mean, std, min, max, BB).
     """

@@ -8,7 +8,8 @@ from typing import Optional, Tuple
 
 # str_cal.py (top of file)
 DEFAULT_WINDOW = 21
-DEFAULT_OUTLIER_K = 2.5
+DEFAULT_OUTLIER_K = 3
+DEFAULT_CURVE_LENGTH = 20
 ##############################################################
 # DATA LOADING AND PREPROCESSING
 ##############################################################
@@ -132,7 +133,9 @@ def fn_main_series_only(raw_df,str_name,str_number, comdty, lookback_prd, DEFAUL
     else:
         str_main_series = pd.Series(raw_df.iloc[:, str_number-1:str_number-1+len(ratio)].values @ np.array(ratio),index=raw_df.index)
         str_main_series= str_main_series*100
+        #print(str_main_series.head(15))
         str_main_series = rolling_bounds_filter(str_main_series, window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
+        #print(str_main_series.head(15))
     
     actual_lookback = min(lookback_prd, max_row)
     # Extract series (convert to 0-indexed)
@@ -473,11 +476,11 @@ def _rolling_sumproduct(row, ratio):
 # STRUCTURE RATIO DEFINITIONS AND ENGINE
 ##############################################################
 index = [
-    "OUT", "S3", "S6", "S12", "L3", "L3(II)", "L6(I)", "L6", "L6(III)", "L6(IV)",
-    "L12(I)", "L12(II)", "L12(III)", "L12", "D3", "D3(II)", "D6(I)", "D6", "D6(III)", "D6(IV)",
-    "D12(I)", "D12(II)", "D12(III)", "D12","E3","E6(I)", "E6(II)", "1X L6- 2X L6(n+1)", "2X L6- 3X L6(n+1)", "1X L6- 2X L6(n+2)", "2X L6- 3X L6(n+2)",
-    "1X L3- 2X L3(n+1)", "2X L3- 3X L3(n+1)", "1X L3- 2X L3(n+2)", "2X L3- 3X L3(n+2)",
-    "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)", "1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)"
+    "OUT", "S3", "S6", "S12", "L3", "L3 (II)", "L6 (I)", "L6", "L6 (III)", "L6 (IV)",
+    "L12 (I)", "L12 (II)", "L12 (III)", "L12", "D3", "D3 (II)", "D6 (I)", "D6", "D6 (III)", "D6 (IV)",
+    "D12 (I)", "D12 (II)", "D12 (III)", "D12","E3","E6 (I)", "E6 (II)", "1x L6- 2x L6(n+1)", "2x L6- 3x L6(n+1)", "1x L6- 2x L6(n+2)", "2x L6- 3x L6(n+2)",
+    "1x L3- 2x L3(n+1)", "2x L3- 3x L3(n+1)", "1x L3- 2x L3(n+2)", "2x L3- 3x L3(n+2)",
+    "1x S1- 2x S1(n+1)", "2x S1n- 1x S1(n+1)", "2x S1- 3x S1(n+1)", "3x S1- 2x S1(n+1)", "1x Out- 2x O(n+1)", "2x Out- 1x O(n+1)", "2x Out- 3x O(n+1)", "3x Out- 2x O(n+1)"
 ]
 
 ratio= [
@@ -509,25 +512,25 @@ ratio= [
     [1, -1, -3, 3, 3, -3, -1, 1],               # "E6(I)"   i=25
     [1, 0, -4, 0, 6, 0, -4, 0, 1],              # "E6(II)"  i=26
 
-    [1, -2, -2, 4, 1, -2],                      # 1X L6- 2X L6(n+1)  i=27
-    [2, -3, -4, 6, 2, -3],                      # 2X L6- 3X L6(n+1)  i=28
-    [1, 0, -4, 0, 5, 0, -2],                    # 1X L6- 2X L6(n+2)  i=29
-    [2, 0, -7, 0, 8, 0, -3],                    # 2X L6- 3X L6(n+2)  i=30
+    [1, -2, -2, 4, 1, -2],                      # 1x L6- 2x L6(n+1)  i=27
+    [2, -3, -4, 6, 2, -3],                      # 2x L6- 3x L6(n+1)  i=28
+    [1, 0, -4, 0, 5, 0, -2],                    # 1x L6- 2x L6(n+2)  i=29
+    [2, 0, -7, 0, 8, 0, -3],                    # 2x L6- 3x L6(n+2)  i=30
 
-    [1, -4, 5, -2],                             # 1X L3- 2X L3(n+1)  i=31
-    [2, -7, 8, -3],                             # 2X L3- 3X L3(n+1)  i=32
-    [1, -2, -1, 4, -2],                         # 1X L3- 2X L3(n+2)  i=33
-    [2, -4, -1, 6, -3],                         # 2X L3- 3X L3(n+2)  i=34
+    [1, -4, 5, -2],                             # 1x L3- 2x L3(n+1)  i=31
+    [2, -7, 8, -3],                             # 2x L3- 3x L3(n+1)  i=32
+    [1, -2, -1, 4, -2],                         # 1x L3- 2x L3(n+2)  i=33
+    [2, -4, -1, 6, -3],                         # 2x L3- 3x L3(n+2)  i=34
 
-    [1,-3,2],                                   # "1X S1n- 2X S1n+1"  i=35
-    [2,-3,1],                                   # "2X S1n- 1X S1n+1"  i=36
-    [2,-5,3],                                   # "2X S1n- 3X S1n+1"  i=37
-    [3,-5,2],                                   # "3X S1n- 2X S1n+1"  i=38
+    [1,-3,2],                                   # "1x S1n- 2x S1n+1"  i=35
+    [2,-3,1],                                   # "2x S1n- 1x S1n+1"  i=36
+    [2,-5,3],                                   # "2x S1n- 3x S1n+1"  i=37
+    [3,-5,2],                                   # "3x S1n- 2x S1n+1"  i=38
 
-    [1,-2],                                     # "1X On- 2X On+1"  i=39
-    [2, -1],                                    # "2X On- 1X On+1"  i=40
-    [2, -3],                                    # "2X On- 3X On+1"  i=41
-    [3, -2],                                    # "3X On- 2X On+1"  i=42
+    [1,-2],                                     # "1x On- 2x On+1"  i=39
+    [2, -1],                                    # "2x On- 1x On+1"  i=40
+    [2, -3],                                    # "2x On- 3x On+1"  i=41
+    [3, -2],                                    # "3x On- 2x On+1"  i=42
                
 ]
 
@@ -557,7 +560,7 @@ def fetch_rates_cycle(lookback_prd, filepath= "SR3_ED_GEN.xlsm", sheetname= "tre
     rates_df.loc['2y10y'] = y2y10
     rates_df.columns= dates
     for i in range(len(rates_df) - 1): # passing all except rates row
-        rates_df.iloc[i]= rolling_bounds_filter(rates_df.iloc[i], window=21, k=DEFAULT_OUTLIER_K)
+        rates_df.iloc[i]= rolling_bounds_filter(rates_df.iloc[i], window=DEFAULT_WINDOW, k=DEFAULT_OUTLIER_K)
 
     max_cols = min(rates_df.shape[1]-1 , lookback_prd)
     rates_df= rates_df.iloc[:, 0:max_cols].copy()
