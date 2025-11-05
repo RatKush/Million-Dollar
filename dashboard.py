@@ -37,12 +37,13 @@ DEFAULT_CURVE_LENGTH = 20
 DEFAULT_LOOKBACK = 250
 MIN_DEFAULT_LOOKBACK = 63  # Minimum lookback period
 DEFAULT_WINDOW = 21
-DEFAULT_OUTLIER_K = 2.5
+DEFAULT_OUTLIER_K = 3
 # Get available Excel files and setup dropdown options
 SUPPORTED_EXCEL_EXTENSIONS = ('.xlsx', '.xlsm', '.csv')
 DEFAULT_FILES = ["SR3_ED_GEN.xlsm", "SR3.xlsx"]
 DEFAULT_STR_NAME= "L6"
 DEFAULT_STR_NO=8
+
 # Application configuration
 APP_CONFIG = {
     'title': "Million Dollar",
@@ -348,7 +349,7 @@ def store_str_df_dcc_(raw_data_dict, win_local,str_name,  general_store):
         if raw_df.empty:
             raise PreventUpdate
 
-        local_win_for_str_df= min(win_local+ 21, raw_df.shape[0])
+        local_win_for_str_df= min(win_local+ DEFAULT_WINDOW, raw_df.shape[0])
         sub_df = raw_df.iloc[:local_win_for_str_df, :]
         if not raw_df.empty:
             first_row_key = tuple(raw_df.iloc[0].values)
@@ -404,7 +405,7 @@ def update_curve_plot(raw_data_dict,  curve_len, str_name, general_store, active
             warning_plot("⚠ raw data empty after reconstruction")
         #print(raw_df.head())
         #raw_data,  comdty, local_win, str_name)
-        local_win_for_str_df= min(win_local+ 21, raw_df.shape[0])
+        local_win_for_str_df= min(win_local+ DEFAULT_WINDOW, raw_df.shape[0])
         # ---- Simple global cache ----
         sub_df = raw_df.iloc[:local_win_for_str_df, :]
                 # Pick first row values as tuple (safe even if only one column)
@@ -452,7 +453,7 @@ def update_curve_plot(raw_data_dict,  curve_len, str_name, general_store, active
             Settle=Settle_days if plot_flags["Settle"] else None,
             date1=date1,
             date2=date2,
-            win_local=int(win_local) if win_local else 21,
+            win_local=int(win_local) if win_local else DEFAULT_WINDOW,
             quantile=float(quantile) if plot_flags["quant_ser"] else None,
             bb_std=float(bb_std) if plot_flags["BB"] else None,
             DEFAULT_WINDOW=DEFAULT_WINDOW, 
@@ -540,6 +541,7 @@ def update_chart_tab(stored: Dict[str, Any], general) -> Any:
         )
         #print(series.head())
         str_name = f"{general[0]}{general[1]}({general[2]})"
+        #print("latest", series.index[0], series.iloc[0])
         return plot_single_structure(series, str_name)
 
     except Exception as e:
@@ -967,7 +969,7 @@ def update_kde_plot_tab4(cycle_store, kde_flags, val_line, pc_line, general_stor
 def cached_compute_3d_df(comdty, df_hash: str, local_win: int, curve_len: int, raw_df):
     @cache.memoize()
     def _inner(df_hash, local_win, curve_len, comdty):
-        print(f"Cache miss → computing 3D df (win={local_win}, len={curve_len})")
+        print(f"Cache miss → computing 3D df in tab 7 matrix (win={local_win}, len={curve_len})")
         return compute_3d_structure(comdty, raw_df, local_win=local_win, curve_length=curve_len)
     return _inner( df_hash, local_win, curve_len, comdty)
 
@@ -1093,29 +1095,117 @@ def handle_colorscale_menu(n_clicks, selected_value, current_style, stored_data)
 
 ############################## color scale switching  ends #########################################################
 ############################## user matrix default ratio remember #########################################################
+
+#load initial default based on commodity and previous user preference
+def get_default_ratios(comdty: str):
+    if comdty in {"VIX", "MEETS", "FVS", "VIX-VOX", "SZI0", "SR1"}:
+        return [
+            "OUT", "S3", "S6", "L3",
+            "1x S1- 2x S1(n+1)", "2x S1n- 1x S1(n+1)",
+            "2x S1- 3x S1(n+1)", "3x S1- 2x S1(n+1)", 
+            "1x Out- 2x O(n+1)", "2x Out- 1x O(n+1)",
+            "2x Out- 3x O(n+1)", "3x Out- 2x O(n+1)"
+        ]
+    elif comdty in {"SR3", "ER", "SO3", "SA3", "CRA", "ER3"}:
+        return [
+            "S3", "S6", "S12", "L3", "L3 (II)", "L6 (I)", "L6", "L6 (III)", "L6 (IV)",
+            "L12 (I)", "L12 (II)", "L12 (III)", "L12", "D3", "D3 (II)", "D6 (I)", "D6",
+            "D6 (III)", "D6 (IV)", "D12 (I)", "D12 (II)", "D12 (III)", "D12",
+            "E3", "E6 (I)", "E6 (II)",
+            "1x L6- 2x L6(n+1)", "2x L6- 3x L6(n+1)",
+            "1x L6- 2x L6(n+2)", "2x L6- 3x L6(n+2)",
+            "1x L3- 2x L3(n+1)", "2x L3- 3x L3(n+1)",
+            "1x L3- 2x L3(n+2)", "2x L3- 3x L3(n+2)"
+        ]
+    elif comdty in {"SR3-ER", "ER-SO3", "SR3-SO3"}:
+        return ["S3", "S6", "S12",
+            "L12 (I)", "L12 (II)", "L12 (III)", "L12",
+            "1x L6- 2x L6(n+1)", "2x L6- 3x L6(n+1)",
+            "1x L6- 2x L6(n+2)", "2x L6- 3x L6(n+2)"
+            ]
+    else:
+        return ["OUT", "S3", "S6", "S12", "L3", "L6", "L12", "D3", "D6", "D12", "E3", "E6"]
+
 @app.callback(
     Output('dropdown-ratio', 'value'),
     Output('user-matrix_ratio-preference', 'data'),
+    Input('general-store', 'data'),
     Input('dropdown-ratio', 'value'),
-    #Input('dropdown-commodity', 'value'),
     State('user-matrix_ratio-preference', 'data'),
     prevent_initial_call=False
 )
-def sync_ratio_preferences(selected_ratios, stored_data):
-    # Ensure the store is initialized
-    if stored_data is None:
-        return selected_ratios, selected_ratios
+def manage_ratios(general_store, user_selection, store):
+    """
+    Handles initial load, user edits, and per-commodity persistence.
+    """
 
+    # --- bootstrap store ---
+    if not isinstance(store, dict):
+        store = {"ratios": {}, "last_modified": None}
+    if "ratios" not in store:
+        store["ratios"] = {}
+
+    comdty = None
+    if general_store and isinstance(general_store, list) and general_store:
+        comdty = general_store[0]
+
+    # --- if no valid commodity ---
+    if not comdty:
+        return no_update, store
+
+    # --- detect which triggered ---
     trigger = ctx.triggered_id
-     # ---- Case 1: App startup or reload ----
-    if trigger is None:# Restore saved value from store
-        return stored_data, stored_data
 
-    # ---- Case 2: User changed ratios manually ----
-    if trigger == 'dropdown-ratio': # Update store to match latest selection
-        return selected_ratios, selected_ratios
-    # Case 3: No relevant trigger
-    return no_update, stored_data
+    # --- define defaults (same mapping logic as before) ---
+    default_ratios = get_default_ratios(comdty)  # we’ll define this as helper below
+
+    # --- CASE 1: initial load or commodity switch ---
+    if trigger == "general-store" or trigger is None:
+        current = store["ratios"].get(comdty)
+        if current:
+            # user has customized before → restore
+            return current, store
+        else:
+            # first time load for this commodity
+            store["ratios"][comdty] = default_ratios
+            return default_ratios, store
+
+    # --- CASE 2: user manually selected new ratios ---
+    if trigger == "dropdown-ratio":
+        store["ratios"][comdty] = user_selection or []
+        store["last_modified"] = comdty
+        return user_selection, store
+
+    # fallback
+    return no_update, store
+
+
+
+
+
+# @app.callback(
+#     Output('dropdown-ratio', 'value'),
+#     Output('user-matrix_ratio-preference', 'data'),
+#     Input('dropdown-ratio', 'value'),
+#     #Input('dropdown-commodity', 'value'),
+#     State('user-matrix_ratio-preference', 'data'),
+#     prevent_initial_call=False
+# )
+# def sync_ratio_preferences(selected_ratios, stored_data):
+#     # Ensure the store is initialized
+#     if stored_data is None:
+#         return selected_ratios, selected_ratios
+
+#     trigger = ctx.triggered_id
+#      # ---- Case 1: App startup or reload ----
+#     if trigger is None:# Restore saved value from store
+#         return stored_data, stored_data
+
+#     # ---- Case 2: User changed ratios manually ----
+#     if trigger == 'dropdown-ratio': # Update store to match latest selection
+#         return selected_ratios, selected_ratios
+#     # Case 3: No relevant trigger
+#     return no_update, stored_data
 ############################## user matrix default ratio remember ends #########################################################
 @app.callback(
     Output('heatmap-matrix', 'figure'),
@@ -1135,14 +1225,11 @@ def update_tab7_heatmap_basic(raw_data_dict,selected_ratio, local_win, toggle_st
     if not raw_data_dict:
         return warning_plot("⚠ data not available (no stored data)"), time.time()
 
-    if not selected_ratio:
-        selected_ratio=  ["OUT", "S3","S6","L3","L6"] # Return an empty figure
-
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOX", "SZI0"}:
-            selected_ratio =["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
-
+    else:
+       return warning_plot("⚠ data not available (no general store)"), time.time()
+    
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
         curve_len= DEFAULT_CURVE_LENGTH
         print("Invalid curve_len update_tab_heatmap_basic")
@@ -1279,15 +1366,9 @@ def clear_click_data_on_dataset_change(_):
 def display_cell_details(click_data, raw_data_dict ,selected_ratio,curve_len, local_win, general_store):
     if click_data is None:
         return dash.no_update, dash.no_update
-    
-    if not selected_ratio:
-        selected_ratio=  {"Out", "S3","S6","L3","L6"} # Return an empty figure
-
     if general_store is not None:
         comdty = general_store[0]
-        if comdty in {"VIX", "MEETS", "FVS", "VIX-VOX", "SZI0"}:
-            selected_ratio = ["OUT", "S3", "S6", "L3","1X Out- 2X O(n+1)", "2X Out- 1X O(n+1)", "2X Out- 3X O(n+1)", "3X Out- 2X O(n+1)", "1X S1- 2X S1(n+1)", "2X S1n- 1X S1(n+1)", "2X S1- 3X S1(n+1)", "3X S1- 2X S1(n+1)"]
-
+        
     if curve_len is None or (isinstance(curve_len, str) and not curve_len.isdigit()) or (isinstance(curve_len, str) and int(curve_len) <= 0):
         curve_len= DEFAULT_CURVE_LENGTH
         print("Invalid curve_len in display_cell_details")
@@ -1445,7 +1526,6 @@ def warning_plot(warning):
 # ------------------------------------------------
 if __name__ == '__main__':
     #app.run(debug= False, host='0.0.0.0', port=8050) #for live hosted version  https://million-dollar.onrender.com/
-    #app.run(debug= True) #self
-    app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
-
+    app.run(debug= True) #self
+    #app.run(debug=False, port=get_free_port(8050, 8060))  #for download 
 
