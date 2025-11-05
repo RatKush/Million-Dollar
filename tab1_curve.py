@@ -9,7 +9,7 @@ from datetime import datetime
 import pymannkendall as mk
 from scipy.stats import linregress
 
-from str_cal import get_ratio, rolling_bounds_filter
+from str_cal import get_ratio, rolling_bounds_filter, DEFAULT_WINDOW, DEFAULT_OUTLIER_K
 
 
 def create_tab1_view():
@@ -58,7 +58,7 @@ def create_tab1_view():
                             dbc.Stack([
                                 dbc.Row([
                                     dbc.Col(dbc.Label("Local win"), width=6),
-                                    dbc.Col(dbc.Input(id="win-local", type="number", value=21, min=1, step=1, debounce=True), width=6)
+                                    dbc.Col(dbc.Input(id="win-local", type="number", value=DEFAULT_WINDOW, min=1, step=1, debounce=True), width=6)
                                 ], id="win-local-row", className="mb-2", style={"display": "none"}),
 
                                 dbc.Row([
@@ -439,7 +439,7 @@ def add_arrows(fig, data, name=None):
     ))
     return fig
 
-def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: dict,comdty:str= "SR3",curve_len:int=20, str_name :str= "L6",Settle: int = None,date1=None,date2=None,win_local: int = 21,quantile: float = None,bb_std: float = None, DEFAULT_WINDOW=21, DEFAULT_OUTLIER_K=2):
+def generate_curve_plot(str_df: pd.DataFrame, raw_df: pd.DataFrame ,plot_flags: dict,comdty:str= "SR3",curve_len:int=20, str_name :str= "L6",Settle: int = None,date1=None,date2=None,win_local: int = DEFAULT_WINDOW,quantile: float = None,bb_std: float = None, DEFAULT_WINDOW=DEFAULT_WINDOW, DEFAULT_OUTLIER_K=DEFAULT_OUTLIER_K):
     if str_df is None or str_df.empty:
         return warning_plot_copy2("⚠ No data to plot")
 

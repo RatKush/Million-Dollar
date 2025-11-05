@@ -7,7 +7,7 @@ import plotly.graph_objs as go
 from scipy.stats import percentileofscore
 from dash import dcc, html
 
-from str_cal import   index, get_ratio, process_series, get_rank
+from str_cal import   index, get_ratio, process_series, get_rank, DEFAULT_WINDOW, DEFAULT_OUTLIER_K, DEFAULT_CURVE_LENGTH
 
 
 
@@ -143,18 +143,18 @@ def create_tab7_view(DEFAULT_CURVE_LENGTH):
                                 dcc.Dropdown(
                                     id='dropdown-ratio',
                                     options=[{'label': s, 'value': s} for s in index],
-                                    value= default_ratios,
+                                    #value= default_ratios,
                                     # value= [ index[i] for i in list(range(0, 7)) + list(range(8, 11)) + list(range(8, 11))+  ]
                                     multi=True,
                                     clearable=False,
-                                    style={"width": "100%","maxHeight": "120px", "overflowY": "auto", "fontSize": "10px", "background-color": "#2b2e35", "color": "#ffffff"}  
+                                    style={"width": "100%","maxHeight": "140px","minHeight": "120px", "overflowY": "auto", "fontSize": "10px", "background-color": "#2b2e35", "color": "#ffffff"}  
                                 )
                             ], id='dropdown-wrapper', className="mb-2", style={"width": "100%"}),     
 
                             html.Div([
                                 html.Label("Local Window", className="form-label", style={"width": "68%", "marginBottom": 0}),
                                 dcc.Input(
-                                    id="input-local-window", type="number", min=1, value=21,
+                                    id="input-local-window", type="number", min=1, value=DEFAULT_WINDOW,
                                     debounce=False, placeholder="#", className="form-control form-control-sm",
                                     style={"width": "32%"}
                                 )
@@ -368,7 +368,7 @@ def handle_outliers(series: pd.Series, window_size: int, threshold: float, metho
 
 
 
-def compute_3d_structure(comdty, out_df: pd.DataFrame, structure_names= all_strs , local_win=21, curve_length=20 ) -> pd.DataFrame:
+def compute_3d_structure(comdty, out_df: pd.DataFrame, structure_names= all_strs , local_win=DEFAULT_WINDOW, curve_length=DEFAULT_CURVE_LENGTH ) -> pd.DataFrame:
     """
     Efficiently compute a MultiIndex DataFrame with shape (Date, Structure, Contract).
     - Z axis: Dates (depth)
@@ -671,7 +671,7 @@ def compute_range_df(str_data_3d):
     return range_df
 
 
-def classify_regime_in_series(str_data_3d, bb_k=2, window=21):
+def classify_regime_in_series(str_data_3d, bb_k=DEFAULT_OUTLIER_K, window=DEFAULT_WINDOW):
     """
     BB/ATR-based regime classifier for last 21-day series.
 
