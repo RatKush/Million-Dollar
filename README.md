@@ -20,7 +20,7 @@ Classifies each day into 3 cycles: Hike cycle, Ease cycle, and Sideways based on
 
 Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience
 
-**4. Forecasting**  
+**5. Forecasting**  
 Classifies each day into 3 cycles: Hike cycle, Ease cycle, and Sideways based on user-set criteria. Analyze KDE distribution of each structure based on classification
 
 Built using Dash, Plotly, and Bootstrap for a seamless and responsive experience
